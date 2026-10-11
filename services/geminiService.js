@@ -265,6 +265,7 @@ Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan 
  * Menggunakan Hybrid RAG dengan referensi mendalam ShareTechNote
  */
 export async function answerGeneralTelcoQuestion(question, userId = 0, options = {}) {
+  const { contextTrack } = options;
   const startTime = Date.now();
   const maxHistory = parseInt(process.env.MAX_CONVERSATION_HISTORY || '5', 10);
   const recentHistory = getRecentLlmConversation(userId, maxHistory);
