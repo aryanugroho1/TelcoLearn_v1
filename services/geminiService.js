@@ -312,28 +312,27 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
     prompt = `Pertanyaan dari pelajar:
 "${question}"${historyContext}
 
-REFERENSI PENGETAHUAN RESMI (SHARETECHNOTE KNOWLEDGE BASE):
-Topik: ${kbMatch.title} (${kbMatch.category})
-Ringkasan: ${kbMatch.summary}
-Konten Detail:
+KONTEKS TEKNIS:
 ${kbMatch.core_content}
 
-Instruksi Menjawab (Standar ShareTechNote untuk WhatsApp):
-1. Jawab pertanyaan pelajar secara komprehensif, teknis, dan presisi mengacu pada referensi ShareTechNote di atas dan spesifikasi 3GPP terkini.
-2. Jika pertanyaan menyangkut alur/proses (seperti call flow, signal acquisition, RAR, registration), WAJIB gunakan format urutan step-by-step yang rapi dan terstruktur (1️⃣, 2️⃣, 3️⃣ atau 1, 2, 3).
-3. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) / RNTI / Timer penting jika relevan.
-4. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan markdown heading '#' atau format tabel markdown.
-5. JANGAN menyertakan URL link luar. Berikan penjelasan mandiri yang lengkap, tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${followUpInstruction}${languageInstruction}`;
+Instruksi Menjawab:
+1. Jawab pertanyaan pelajar secara komprehensif, teknis, dan presisi mengacu pada konteks teknis di atas dan spesifikasi 3GPP terkini.
+2. KERAHASIAAN SUMBER: JANGAN PERNAH menyebutkan kata "ShareTechNote", "database", "knowledge base", "basis data", "RAG", "Gemini", atau sumber data internal dalam teks jawaban. Penerima pesan tidak perlu dan tidak boleh tahu asal usul jawaban. Jawab langsung secara alami tanpa kalimat klise seperti "Berdasarkan referensi/database...".
+3. Jika pertanyaan menyangkut alur/proses (seperti call flow, signal acquisition, RAR, registration), WAJIB gunakan format urutan step-by-step yang rapi dan terstruktur (1️⃣, 2️⃣, 3️⃣ atau 1, 2, 3).
+4. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) / RNTI / Timer penting jika relevan.
+5. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan markdown heading '#' atau format tabel markdown.
+6. JANGAN menyertakan URL link luar. Berikan penjelasan mandiri yang lengkap, tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${followUpInstruction}${languageInstruction}`;
   } else {
     prompt = `Pertanyaan dari pelajar:
 "${question}"${historyContext}
 
-Instruksi Menjawab (Standar ShareTechNote untuk WhatsApp):
-1. Jawablah secara profesional, mendalam, dan akurat berdasarkan spesifikasi 3GPP (Rel-15 s/d Rel-18) dan standar telekomunikasi (seperti konsep ShareTechNote).
-2. Jika pertanyaan mengenai alur kerja atau protokol, gunakan format urutan step-by-step berstruktur lengkap dengan kanal radio & layer terkait.
-3. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) penting jika relevan.
-4. Gunakan format tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan heading '#' atau format tabel markdown.
-5. JANGAN sertakan link URL luar. Berikan penjelasan mandiri yang tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${followUpInstruction}${languageInstruction}`;
+Instruksi Menjawab:
+1. Jawablah secara profesional, mendalam, dan akurat berdasarkan spesifikasi 3GPP (Rel-15 s/d Rel-18) dan standar telekomunikasi terkini.
+2. KERAHASIAAN SUMBER: JANGAN PERNAH menyebutkan kata "ShareTechNote", "database", "knowledge base", "basis data", "RAG", "Gemini", atau sumber data internal dalam teks jawaban. Penerima pesan tidak perlu dan tidak boleh tahu asal usul jawaban. Jawab langsung secara alami.
+3. Jika pertanyaan mengenai alur kerja atau protokol, gunakan format urutan step-by-step berstruktur lengkap dengan kanal radio & layer terkait.
+4. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) penting jika relevan.
+5. Gunakan format tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan heading '#' atau format tabel markdown.
+6. JANGAN sertakan link URL luar. Berikan penjelasan mandiri yang tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${followUpInstruction}${languageInstruction}`;
   }
 
   const isEnglishQuestion = /\b(what|how|why|who|when|where|which|can|could|would|should|is|are|do|does|explain|in english|english)\b/i.test(question);

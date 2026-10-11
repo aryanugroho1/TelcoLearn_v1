@@ -700,9 +700,22 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
     }
 
     // 6.5. ADMIN TOKEN DASHBOARD & REPORT (Khusus Admin Pribadi / Self-Chat)
-    if (lowerText === '/admin' || lowerText.startsWith('/admin') || lowerText === '/stats') {
-      const adminPhone = (process.env.ADMIN_PHONE_NUMBER || process.env.BOT_PHONE_NUMBER || '').replace(/\D/g, '');
-      const isSenderAdmin = isSelfChat || (phoneNumber && adminPhone && phoneNumber === adminPhone);
+    if (lowerText === '/admin' || lowerText.startsWith('/admin') || lowerText === '/stats' || lowerText === '/db' || lowerText === '/database') {
+      const configuredAdmins = [
+        process.env.ADMIN_PHONE_NUMBER,
+        process.env.BOT_PHONE_NUMBER,
+        '817090934764'
+      ].filter(Boolean).flatMap(p => p.split(',')).map(p => p.replace(/\D/g, '').trim()).filter(Boolean);
+
+      const isSenderAdmin = isSelfChat || configuredAdmins.some(adminNum => {
+        return (
+          phoneNumber === adminNum ||
+          cleanSenderPhone === adminNum ||
+          user?.phone_number === adminNum ||
+          senderJid.startsWith(adminNum) ||
+          senderJid.includes(adminNum)
+        );
+      });
 
       if (!isSenderAdmin) {
         await reply({ text: '⛔ Perintah ini khusus untuk Administrator TelcoLearn.' });

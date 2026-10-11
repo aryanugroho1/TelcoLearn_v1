@@ -153,30 +153,37 @@ export function generateHtmlReport(metrics, weeklyTrend) {
 export function formatWhatsAppAdminReport(metrics) {
   const isHealthy = metrics.total_requests < 1200;
   const statusIcon = isHealthy ? '🟢' : '🔴';
+  const db = metrics.db_stats || {};
   
-  return `📊 *TELCOLEARN AI USAGE DASHBOARD*
+  return `📊 *TELCOLEARN ADMIN & DATABASE DASHBOARD*
 📅 *Tanggal:* ${metrics.date}
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
-${statusIcon} *Status Free Tier:* ${metrics.verdict_message}
+📦 *STATUS DATA TERSETOR KE DATABASE:*
+• Chat Baru Ter-setor Hari Ini : *${db.new_conversations_today || metrics.total_requests} entri*
+• Total Riwayat Chat di DB     : *${db.total_conversations_all_time || metrics.total_requests} entri*
+• Pengguna Baru Hari Ini        : *${db.new_users_today || 0} user*
+• Total Pengguna Terdaftar     : *${db.total_users || 0} user*
+• Total Modul Materi Aktif     : *${db.total_modules || 0} modul*
+• Total Soal Kuis di DB        : *${db.total_quizzes || 0} soal*
+• Total Catatan Teknis User    : *${db.total_notes || 0} catatan*
+• Ensiklopedia Knowledge Base   : *${db.total_kb || 0} topik*
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+${statusIcon} *Status Kuota AI Gemini:* ${metrics.verdict_message}
 
 ⚡ *Request Hari Ini:* *${metrics.total_requests}* / 1.500 RPD
-📊 *Utilisasi Kuota:* *${metrics.quota_used_pct}%*
-🛡️ *Sisa Headroom:* *${metrics.remaining_requests}* Request tersisa
+📊 *Utilisasi Kuota:* *${metrics.quota_used_pct}%* (${metrics.remaining_requests} request tersisa)
 
 🔤 *Konsumsi Token:*
 • Prompt (Input) : ${Number(metrics.total_prompt_tokens).toLocaleString()}
 • Answer (Output): ${Number(metrics.total_output_tokens).toLocaleString()}
 • *Total Token*   : *${Number(metrics.total_tokens).toLocaleString()}*
 
-👥 *Insinyur Aktif:* *${metrics.active_users} Orang*
-⏱️ *Rata-rata Latensi:* ${metrics.avg_latency_ms} ms
+👥 *Insinyur Aktif:* *${metrics.active_users} Orang* | ⏱️ Latensi: ${metrics.avg_latency_ms} ms
 
-💰 *Estimasi Biaya Jika Paid:*
-• USD: $${metrics.estimated_cost_usd}
-• IDR: *Rp ${Number(metrics.estimated_cost_idr).toLocaleString('id-ID')}*
-
-💡 *Keputusan:* ${metrics.verdict === 'STAY_FREE_TIER' ? 'Tetap di Free Tier Google (Biaya Rp 0).' : 'Pertimbangkan pasang billing kartu kredit di GCP.'}`;
+💰 *Estimasi Biaya:* Rp ${Number(metrics.estimated_cost_idr).toLocaleString('id-ID')} ($${metrics.estimated_cost_usd})
+💡 *Rekomendasi:* ${metrics.verdict === 'STAY_FREE_TIER' ? 'Tetap gunakan Free Tier Google (Biaya Rp 0).' : 'Pertimbangkan aktivasi billing di GCP.'}`;
 }
 
 /**

@@ -372,6 +372,16 @@ export function getDailyTokenMetrics(targetDate = null) {
     verdictMessage = '⚠️ Penggunaan mencapai >80% kuota gratis. Siapkan kartu kredit di Google Cloud console.';
   }
 
+  // Statistik Database Terkini (Jumlah data yang tersimpan / ter-setor di database)
+  const totalLogs = db.prepare('SELECT COUNT(*) as count FROM llm_conversation_logs').get().count;
+  const totalModules = db.prepare('SELECT COUNT(*) as count FROM modules').get().count;
+  const totalQuizzes = db.prepare('SELECT COUNT(*) as count FROM quizzes').get().count;
+  const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+  const totalNotes = db.prepare('SELECT COUNT(*) as count FROM custom_user_notes').get().count;
+  const totalKb = db.prepare('SELECT COUNT(*) as count FROM knowledge_base').get().count;
+  const newUsersToday = db.prepare(`SELECT COUNT(*) as count FROM users WHERE DATE(created_at, 'localtime') = ${dateClause}`).get(...dateParam).count;
+  const newNotesToday = db.prepare(`SELECT COUNT(*) as count FROM custom_user_notes WHERE DATE(created_at, 'localtime') = ${dateClause}`).get(...dateParam).count;
+
   return {
     date: targetDate || new Date().toISOString().split('T')[0],
     total_requests: totalRequests,
@@ -386,7 +396,18 @@ export function getDailyTokenMetrics(targetDate = null) {
     estimated_cost_usd: totalCostUsd.toFixed(4),
     estimated_cost_idr: totalCostIdr,
     verdict,
-    verdict_message: verdictMessage
+    verdict_message: verdictMessage,
+    db_stats: {
+      new_conversations_today: totalRequests,
+      total_conversations_all_time: totalLogs,
+      new_users_today: newUsersToday,
+      total_users: totalUsers,
+      total_modules: totalModules,
+      total_quizzes: totalQuizzes,
+      new_notes_today: newNotesToday,
+      total_notes: totalNotes,
+      total_kb: totalKb
+    }
   };
 }
 
