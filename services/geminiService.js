@@ -255,7 +255,8 @@ Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan 
   }
 
   const latencySec = (latency / 1000).toFixed(1);
-  const tokenStats = `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_`;
+  const showTokenStats = process.env.SHOW_TOKEN_STATS === 'true';
+  const tokenStats = showTokenStats ? `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_` : '';
   return `${result.text}${tokenStats}`;
 }
 
@@ -345,7 +346,8 @@ Instruksi Menjawab (Standar ShareTechNote untuk WhatsApp):
   }
 
   const latencySec = (latency / 1000).toFixed(1);
-  const tokenStats = `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_`;
+  const showTokenStats = process.env.SHOW_TOKEN_STATS === 'true';
+  const tokenStats = showTokenStats ? `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_` : '';
   return `${result.text}${tokenStats}`;
 }
 
@@ -390,7 +392,8 @@ Gunakan tipografi WhatsApp murni (*bold*, _italic_, \`\`\`code\`\`\`). Hindari t
     console.error('Failed to log LLM image interaction to SQLite:', dbErr);
   }
 
-  const tokenStats = `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_`;
+  const showTokenStats = process.env.SHOW_TOKEN_STATS === 'true';
+  const tokenStats = showTokenStats ? `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_` : '';
   return `${result.text}${tokenStats}`;
 }
 
@@ -473,6 +476,7 @@ Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`).`;
     console.error('Failed to log LLM doc interaction to SQLite:', dbErr);
   }
 
-  const tokenStats = `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_`;
+  const showTokenStats = process.env.SHOW_TOKEN_STATS === 'true';
+  const tokenStats = showTokenStats ? `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_` : '';
   return `${result.text}${tokenStats}`;
 }
