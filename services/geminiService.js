@@ -34,8 +34,14 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
     };
   }
 
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-  const candidateModels = Array.from(new Set([primaryModel, 'gemini-3.5-flash', 'gemini-3.5-flash-lite']));
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
+  const candidateModels = Array.from(new Set([
+    primaryModel,
+    'gemini-3.1-flash-lite',
+    'gemini-flash-lite-latest',
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash'
+  ]));
   const timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS || '35000', 10);
 
   let timer = null;
@@ -56,7 +62,7 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
           const genConfig = {
             systemInstruction: systemInstruction,
             temperature: 0.2,
-            maxOutputTokens: 3072
+            maxOutputTokens: 2048
           };
           // Extended thinking hanya diaktifkan jika analisis log mendalam
           if (options.isLogAnalysis) {
@@ -74,7 +80,7 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
                   ]
                 }
               ]
-            : prompt;
+            : (Array.isArray(prompt) ? prompt : prompt);
 
           const response = await client.models.generateContent({
             model: currentModel,
@@ -83,7 +89,8 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
           });
           const text = response.text || (response.candidates?.[0]?.content?.parts?.[0]?.text) || '';
           const usageMetadata = response.usageMetadata || {};
-          const pTokens = usageMetadata.promptTokenCount || Math.round((prompt.length + 150) / 3.8);
+          const promptCharLength = typeof prompt === 'string' ? prompt.length : JSON.stringify(prompt).length;
+          const pTokens = usageMetadata.promptTokenCount || Math.round((promptCharLength + 150) / 3.8);
           const oTokens = usageMetadata.candidatesTokenCount || Math.round(text.length / 3.8);
           const tTokens = usageMetadata.totalTokenCount || (pTokens + oTokens);
           return {
@@ -262,31 +269,36 @@ Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan 
 
 /**
  * Menjawab pertanyaan umum seputar 4G/5G, O-RAN, dan Machine Learning
- * Menggunakan Hybrid RAG dengan referensi mendalam ShareTechNote
+ * Menggunakan Continuous Multi-Turn Context, Smart RAG Gating, dan Draw-Back Capacity Token
  */
 export async function answerGeneralTelcoQuestion(question, userId = 0, options = {}) {
   const { contextTrack } = options;
   const startTime = Date.now();
-  const maxHistory = parseInt(process.env.MAX_CONVERSATION_HISTORY || '5', 10);
+
+  // DRAW-BACK CAPACITY TOKEN: Batasi riwayat maksimal 3 percakapan untuk menghemat token dan menjaga latensi <1s
+  const maxHistory = parseInt(process.env.MAX_CONVERSATION_HISTORY || '3', 10);
   const recentHistory = getRecentLlmConversation(userId, maxHistory);
 
-  // Deteksi jika pertanyaan adalah permintaan alih bahasa (misal: "In english please")
+  // 1. Deteksi Pertanyaan Lanjutan Kontekstual (Follow-Up with Anaphoric References)
+  const cleanQ = question.trim().toLowerCase();
   const isLanguageFollowUp = /^\s*(in\s+english\s*(please)?|please\s*in\s*english|translate\s*to\s*english|english\s*version|tolong\s*bahasa\s*inggris|pake\s*bahasa\s*inggris|bahasa\s*inggris\s*dong)\s*$/i.test(question.trim());
+  const isFollowUpPattern = /^(apakah|kenapa|mengapa|bagaimana|apa\s*yang|terus|lalu|solusinya|penyebabnya|faktor|contohnya|dan|kalo|kalau|kenapa\s*bisa|apa\s*bedanya|kapan|dimana|siapa)\b|.*\b(ini|itu|tersebut|tadi|kasus\s*ini|masalah\s*ini|kondisi\s*ini|skenario\s*ini|pada\s*sa|pada\s*nsa|sa\s*atau\s*nsa)\b/i.test(cleanQ);
+  const isConversationalFollowUp = recentHistory.length > 0 && (isFollowUpPattern || isLanguageFollowUp || question.trim().length < 45);
 
-  let kbSearchQuery = question;
-  if (isLanguageFollowUp && recentHistory.length > 0) {
-    kbSearchQuery = recentHistory[recentHistory.length - 1].incoming_query;
+  const lastInteraction = recentHistory[recentHistory.length - 1];
+  const lastTopic = lastInteraction?.incoming_query || '';
+
+  // 2. Smart RAG Gating:
+  // JANGAN jalankan pencarian RAG artikel umum jika ini adalah follow-up lanjutan dari use-case aktif!
+  // Mencegah over-eager RAG (misal "apakah ini SA atau NSA" memicu artikel 3000 token registrasi 5G SA yang merusak konteks throughput).
+  let kbMatch = null;
+  if (!isConversationalFollowUp) {
+    kbMatch = searchKnowledgeBase(question);
+  } else if (isLanguageFollowUp && lastTopic) {
+    kbMatch = searchKnowledgeBase(lastTopic);
   }
 
-  const kbMatch = searchKnowledgeBase(kbSearchQuery);
-
-  let historyContext = '';
-  if (recentHistory && recentHistory.length > 0) {
-    historyContext = `\n\nRIWAYAT PERCAKAPAN SEBELUMNYA:\n` + recentHistory.map((h, i) => 
-      `[Sesi ${i+1}]\nPelajar: "${h.incoming_query}"\nJawaban AI Terakhir:\n${h.ai_response.slice(0, 1000)}...`
-    ).join('\n\n');
-  }
-
+  // 3. Perspectives & Instructions
   let trackContextInstruction = '';
   if (contextTrack === 'drive_test') {
     trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan secara mendalam dari sudut pandang *Field & Drive Test* (pengukuran RF di rute pengujian lapangan, analisis parameter RSRP/RSRQ/SINR/BLER di jalan, penggunaan tool lapangan seperti TEMS/Nemo/Scanner, physical cell issues seperti overshooting/antenna tilt/azimuth/cross feeder, handover coverage di rute perjalanan, dan optimasi radio lapangan).`;
@@ -298,19 +310,35 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
     trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan secara mendalam dari sudut pandang *Log Analysis & Modem Triage* (decoding log QXDM, Shannon, Wireshark PCAP trace, analisis Root Cause Analysis (RCA), failure cause code, paket 0xB0C0, 0xB801, 0xB821, crash stack triage, dan parameter log penting yang perlu diverifikasi).`;
   }
 
-  const followUpInstruction = `\n\nPANDUAN PERTANYAAN LANJUTAN (FOLLOW-UP CONVERSATION):
-- Periksa RIWAYAT PERCAKAPAN SEBELUMNYA. Jika pertanyaan pelajar berkaitan atau merupakan tindak lanjut dari pembahasan sebelumnya (seperti HAPS, satelit NTN, biaya CAPEX/OPEX rollout telco, call flow, dll.), Anda WAJIB MENJAWABNYA secara komprehensif dalam konteks topik tersebut. JANGAN PERNAH menolaknya sebagai topik di luar lingkup!`;
-
   const languageInstruction = `\n\nKETENTUAN BAHASA (BILINGUAL MANDATORY):
 - Deteksi bahasa pengguna. Jika pengguna bertanya dalam BAHASA INGGRIS atau meminta ("In english please", "speak english", dll), Anda WAJIB menjawab 100% dalam BAHASA INGGRIS (English) yang fasih, profesional, dan mendalam.
-- Jika pengguna bertanya dalam Bahasa Indonesia, jawablah dalam Bahasa Indonesia.
-- Jika pengguna meminta "In english please" atau terjemahan dari percakapan sebelumnya, sajikan dan jelaskan kembali topik dari riwayat percakapan secara komprehensif dalam Bahasa Inggris.`;
+- Jika pengguna bertanya dalam Bahasa Indonesia, jawablah dalam Bahasa Indonesia.`;
 
-  let prompt = '';
-  if (kbMatch) {
-    console.log(`📚 [Hybrid RAG] Menemukan referensi ShareTechNote: "${kbMatch.title}" untuk pertanyaan: "${question}" (Track: ${contextTrack || 'Umum'})`);
-    prompt = `Pertanyaan dari pelajar:
-"${question}"${historyContext}
+  // 4. DRAW-BACK CAPACITY TOKEN: Pangkas riwayat terdahulu agar hemat token (<350 tokens)
+  const historyTurns = recentHistory.flatMap(h => [
+    { role: 'user', parts: [{ text: h.incoming_query }] },
+    { role: 'model', parts: [{ text: h.ai_response.slice(0, 450) + (h.ai_response.length > 450 ? '...' : '') }] }
+  ]);
+
+  // 5. Context-Anchored User Prompt
+  let userTurnText = '';
+  if (isConversationalFollowUp && lastTopic) {
+    userTurnText = `Pertanyaan pelajar:
+"${question}"
+
+[KONTEKS KASUS BERSAMBUNG - WAJIB DIIKUTI]:
+Pertanyaan di atas adalah kelanjutan langsung dari studi kasus yang baru saja kita bahas:
+-> Kasus Utama: "${lastTopic}"
+
+INSTRUKSI KESINAMBUNGAN KASUS (STRICT CONTINUITY):
+1. JAWABLAH pertanyaan di atas SECARA SPESIFIK DALAM KERANGKA KASUS DI ATAS ("${lastTopic}").
+2. Jika pertanyaan membandingkan arsitektur atau protokol (misal: "apakah ini 5G SA atau NSA?"), jelaskan secara spesifik bagaimana kasus tersebut bermanifestasi pada masing-masing skenario (misal: pada 5G NSA karena keterbatasan 4G anchor leg / split bearer X2 buffer delay vs pada 5G SA karena cell loading, alokasi PRB, atau core network).
+3. DILARANG KERAS mengabaikan use case di atas dan hanya menjelaskan definisi teori umum yang lepas dari konteks kasus!
+4. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan heading markdown '#' atau tabel markdown.
+5. KERAHASIAAN SUMBER: JANGAN menyebutkan kata "ShareTechNote", "database", atau sumber internal.${trackContextInstruction}${languageInstruction}`;
+  } else if (kbMatch) {
+    userTurnText = `Pertanyaan dari pelajar:
+"${question}"
 
 KONTEKS TEKNIS:
 ${kbMatch.core_content}
@@ -321,10 +349,10 @@ Instruksi Menjawab:
 3. Jika pertanyaan menyangkut alur/proses (seperti call flow, signal acquisition, RAR, registration), WAJIB gunakan format urutan step-by-step yang rapi dan terstruktur (1️⃣, 2️⃣, 3️⃣ atau 1, 2, 3).
 4. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) / RNTI / Timer penting jika relevan.
 5. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan markdown heading '#' atau format tabel markdown.
-6. JANGAN menyertakan URL link luar. Berikan penjelasan mandiri yang lengkap, tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${followUpInstruction}${languageInstruction}`;
+6. JANGAN menyertakan URL link luar. Berikan penjelasan mandiri yang lengkap, tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
   } else {
-    prompt = `Pertanyaan dari pelajar:
-"${question}"${historyContext}
+    userTurnText = `Pertanyaan dari pelajar:
+"${question}"
 
 Instruksi Menjawab:
 1. Jawablah secara profesional, mendalam, dan akurat berdasarkan spesifikasi 3GPP (Rel-15 s/d Rel-18) dan standar telekomunikasi terkini.
@@ -332,11 +360,17 @@ Instruksi Menjawab:
 3. Jika pertanyaan mengenai alur kerja atau protokol, gunakan format urutan step-by-step berstruktur lengkap dengan kanal radio & layer terkait.
 4. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) penting jika relevan.
 5. Gunakan format tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan heading '#' atau format tabel markdown.
-6. JANGAN sertakan link URL luar. Berikan penjelasan mandiri yang tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${followUpInstruction}${languageInstruction}`;
+6. JANGAN sertakan link URL luar. Berikan penjelasan mandiri yang tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
   }
 
+  // 6. Native Multi-Turn Payload Assembly
+  const multiTurnPayload = [
+    ...historyTurns,
+    { role: 'user', parts: [{ text: userTurnText }] }
+  ];
+
   const isEnglishQuestion = /\b(what|how|why|who|when|where|which|can|could|would|should|is|are|do|does|explain|in english|english)\b/i.test(question);
-  const result = await callGeminiModel(prompt, GEMINI_SYSTEM_INSTRUCTION, { isLogAnalysis: false, isEnglish: isEnglishQuestion });
+  const result = await callGeminiModel(multiTurnPayload, GEMINI_SYSTEM_INSTRUCTION, { isLogAnalysis: false, isEnglish: isEnglishQuestion });
   const latency = Date.now() - startTime;
 
   try {
