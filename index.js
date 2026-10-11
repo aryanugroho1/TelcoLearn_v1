@@ -50,6 +50,7 @@ const logger = pino({
 import {
   isCooldownActive,
   activateCooldown,
+  clearCooldown,
   calculateBackoff
 } from './services/antiBanService.js';
 
@@ -74,18 +75,29 @@ async function startBot() {
   }
 
   // 0. Cek Circuit Breaker Cooldown Lock
-  const cooldown = isCooldownActive();
-  const forceStart = process.argv.includes('--force');
-  if (cooldown && !forceStart) {
-    console.warn('\n🛑 ========================================================');
-    console.warn('🛑 [CIRCUIT BREAKER AKTIF] ENGINE DITANGGUHKAN SEMENTARA!');
-    console.warn(`🛑 Alasan: ${cooldown.reason}`);
-    console.warn(`🛑 Sisa Waktu Cooldown: ${cooldown.remainingMinutes} Menit (${(cooldown.remainingMinutes / 60).toFixed(1)} Jam)`);
-    console.warn(`🛑 Waktu Buka Otomatis: ${new Date(cooldown.cooldownUntil).toLocaleString('id-ID')}`);
-    console.warn('🛑 Tindakan: Engine menolak menyentuh WhatsApp API agar nomor Anda tidak terblokir permanen.');
-    console.warn('🛑 (Gunakan flag "node index.js --force" jika masa restriksi WhatsApp sudah resmi berakhir)');
-    console.warn('🛑 ========================================================\n');
-    return;
+  const forceStart = process.argv.includes('--force') || 
+                     process.env.FORCE_START === 'true' || 
+                     process.env.RESET_COOLDOWN === 'true';
+
+  if (forceStart) {
+    clearCooldown();
+  } else {
+    const cooldown = isCooldownActive();
+    if (cooldown) {
+      console.warn('\n🛑 ========================================================');
+      console.warn('🛑 [CIRCUIT BREAKER AKTIF] ENGINE DITANGGUHKAN SEMENTARA!');
+      console.warn(`🛑 Alasan: ${cooldown.reason}`);
+      console.warn(`🛑 Sisa Waktu Cooldown: ${cooldown.remainingMinutes} Menit (${(cooldown.remainingMinutes / 60).toFixed(1)} Jam)`);
+      console.warn(`🛑 Waktu Buka Otomatis: ${new Date(cooldown.cooldownUntil).toLocaleString('id-ID')}`);
+      console.warn('🛑 Tindakan: Engine menolak menyentuh WhatsApp API agar nomor Anda tidak terblokir permanen.');
+      console.warn('🛑 Cara Reset Instan di Coolify: Tambahkan Environment Variable:');
+      console.warn('🛑   FORCE_START=true');
+      console.warn('🛑 Lalu deploy / restart aplikasi di Coolify.');
+      console.warn('🛑 ========================================================\n');
+      // Biarkan proses idle agar container tidak crash-loop me-restart setiap detik di Coolify
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      return startBot();
+    }
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
@@ -116,9 +128,20 @@ async function startBot() {
 
   // 1. Logika 8-Digit Pairing Code (Jika belum terdaftar)
   if (usePairingCode && !sock.authState.creds.registered) {
-    if (!pairingNumber) {
-      console.error('\n❌ ERROR: USE_PAIRING_CODE=true tetapi PHONE_NUMBER_FOR_PAIRING kosong di .env');
-      console.error('Mohon isi nomor telepon pada .env (contoh: PHONE_NUMBER_FOR_PAIRING=6281234567890)\n');
+    if (!pairingNumber || pairingNumber === '6281234567890' || pairingNumber.length < 9) {
+      console.warn('\n⚠️ ========================================================');
+      console.warn('⚠️ PERINGATAN: NOMOR WHATSAPP PAIRING MASIH KOSONG ATAU MENGGUNAKAN NOMOR CONTOH!');
+      console.warn(`⚠️ Nomor terbaca: "${pairingNumber || 'KOSONG'}"`);
+      console.warn('⚠️ Server WhatsApp akan langsung menolak (401 / 428) jika menggunakan nomor contoh 6281234567890.');
+      console.warn('⚠️ ');
+      console.warn('⚠️ CARA MENGATASINYA DI COOLIFY:');
+      console.warn('⚠️ 1. Buka Coolify > Project > Environment Variables');
+      console.warn('⚠️ 2. Ganti PHONE_NUMBER_FOR_PAIRING dengan nomor WhatsApp bot Anda (misal: 628158722770)');
+      console.warn('⚠️ 3. Format: Kode negara tanpa spasi atau tanda + (contoh: 628xxx)');
+      console.warn('⚠️ 4. ATAU ubah USE_PAIRING_CODE=false jika Anda lebih suka login via Scan QR Code di logs.');
+      console.warn('⚠️ ========================================================\n');
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      return startBot();
     } else {
       console.log(`\n⏳ Meminta 8-Digit Pairing Code untuk nomor: ${pairingNumber}...`);
       setTimeout(async () => {
@@ -136,7 +159,7 @@ async function startBot() {
           console.log(`4. Masukkan kode: ${rawCode} atau ${formattedCode}`);
           console.log('========================================================\n');
         } catch (pairErr) {
-          console.error('❌ Gagal menghasilkan Pairing Code:', pairErr);
+          console.error('❌ Gagal menghasilkan Pairing Code:', pairErr?.message || pairErr);
         }
       }, 3000);
     }
@@ -154,10 +177,8 @@ async function startBot() {
       qrcode.generate(qr, { small: true });
 
       const qrPngPath = path.join(__dirname, 'qrcode.png');
-      const artifactQrPath = 'C:\\Users\\user\\.gemini\\antigravity-ide\\brain\\641cc9d1-2e44-41e9-8c4c-919d5a0043f0\\qrcode.png';
       try {
         await QRCode.toFile(qrPngPath, qr, { width: 500, margin: 2 });
-        await QRCode.toFile(artifactQrPath, qr, { width: 500, margin: 2 });
         console.log(`\n📷 QR Code PNG resolusi tinggi berhasil disimpan ke:\n   👉 ${qrPngPath}\n`);
       } catch (qrErr) {
         console.error('Gagal menyimpan file qrcode.png:', qrErr);
