@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log*
+.env
+.env.*
+auth_info_baileys
+database/*.db
+database/*.db-journal
+*.db
+*.sqlite
+reports/*.html
+qrcode.png
+.git
+.gitignore
+*.md

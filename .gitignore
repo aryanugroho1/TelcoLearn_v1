@@ -1,0 +1,27 @@
+# Exclude ALL markdown files as explicitly requested
+*.md
+**/*.md
+
+# Dependencies
+node_modules/
+
+# Secrets & Sessions
+.env
+.env.*
+!.env.example
+auth_info_baileys/
+cooldown_lock.json
+qrcode.png
+
+# Databases
+database/*.db
+database/*.db-journal
+database/*.db-wal
+database/*.db-shm
+*.sqlite
+*.db
+
+# Logs & Reports
+*.log
+npm-debug.log*
+reports/*.html

@@ -1,0 +1,22 @@
+services:
+  telcolearn-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telcolearn-engine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Jakarta
+    volumes:
+      # Persistent storage for WhatsApp session auth keys (no re-pairing needed across restarts)
+      - ./auth_info_baileys:/app/auth_info_baileys
+      # Persistent storage for SQLite database (users, chats, tokens, RAG knowledge)
+      - ./database:/app/database
+      # Persistent storage for daily HTML token usage reports
+      - ./reports:/app/reports
+    # Enable terminal stdin & tty so QR code or 8-digit pairing code can render in docker logs
+    tty: true
+    stdin_open: true
