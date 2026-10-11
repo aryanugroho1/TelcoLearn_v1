@@ -62,8 +62,9 @@ const MAX_RECONNECT_ATTEMPTS = 5;
 // Web Gateway state variables (untuk live QR portal di browser Coolify)
 let latestQRDataUrl = null;
 let latestPairingCode = null;
-let botConnectionStatus = 'connecting'; // 'connecting' | 'qr_ready' | 'connected'
+let botConnectionStatus = 'connecting'; // 'connecting' | 'qr_ready' | 'connected' | 'cooldown'
 let botConnectedPhone = null;
+let botCooldownInfo = null;
 
 async function startBot() {
   console.log('\n========================================================');
@@ -88,31 +89,35 @@ async function startBot() {
 
   if (forceStart) {
     clearCooldown();
+    botCooldownInfo = null;
   } else {
     const cooldown = isCooldownActive();
     if (cooldown) {
+      botCooldownInfo = cooldown;
+      botConnectionStatus = 'cooldown';
       console.warn('\n🛑 ========================================================');
       console.warn('🛑 [CIRCUIT BREAKER AKTIF] ENGINE DITANGGUHKAN SEMENTARA!');
       console.warn(`🛑 Alasan: ${cooldown.reason}`);
       console.warn(`🛑 Sisa Waktu Cooldown: ${cooldown.remainingMinutes} Menit (${(cooldown.remainingMinutes / 60).toFixed(1)} Jam)`);
-      console.warn(`🛑 Waktu Buka Otomatis: ${new Date(cooldown.cooldownUntil).toLocaleString('id-ID')}`);
-      console.warn('🛑 Tindakan: Engine menolak menyentuh WhatsApp API agar nomor Anda tidak terblokir permanen.');
-      console.warn('🛑 Cara Reset Instan di Coolify: Tambahkan Environment Variable:');
-      console.warn('🛑   FORCE_START=true');
-      console.warn('🛑 Lalu deploy / restart aplikasi di Coolify.');
       console.warn('🛑 ========================================================\n');
-      // Biarkan proses idle agar container tidak crash-loop me-restart setiap detik di Coolify
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      await new Promise(resolve => setTimeout(resolve, 10000));
       return startBot();
     }
   }
+  botCooldownInfo = null;
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const { version, isLatest } = await fetchLatestBaileysVersion();
   console.log(`📦 Menggunakan Baileys Protocol v${version.join('.')}, isLatest: ${isLatest}`);
 
-  const usePairingCode = (process.env.USE_PAIRING_CODE || 'true').toLowerCase() === 'true';
+  let usePairingCode = (process.env.USE_PAIRING_CODE || 'false').toLowerCase() === 'true';
   const pairingNumber = (process.env.PHONE_NUMBER_FOR_PAIRING || process.env.BOT_PHONE_NUMBER || '').replace(/\D/g, '');
+
+  // Otomatis beralih ke QR Code jika nomor kosong atau nomor contoh
+  if (usePairingCode && (!pairingNumber || pairingNumber === '6281234567890' || pairingNumber.length < 9)) {
+    console.log(`ℹ️ Nomor pairing tidak disetel / bernilai contoh (${pairingNumber || 'kosong'}). Mengalihkan otomatis ke QR Code.`);
+    usePairingCode = false;
+  }
 
   const browserTuple = ['Windows', 'Desktop', '10.0.22631'];
 
@@ -133,44 +138,22 @@ async function startBot() {
 
   sockInstance = sock;
 
-  // 1. Logika 8-Digit Pairing Code (Jika belum terdaftar)
+  // 1. Logika 8-Digit Pairing Code (Jika mode pairing aktif)
   if (usePairingCode && !sock.authState.creds.registered) {
-    if (!pairingNumber || pairingNumber === '6281234567890' || pairingNumber.length < 9) {
-      console.warn('\n⚠️ ========================================================');
-      console.warn('⚠️ PERINGATAN: NOMOR WHATSAPP PAIRING MASIH KOSONG ATAU MENGGUNAKAN NOMOR CONTOH!');
-      console.warn(`⚠️ Nomor terbaca: "${pairingNumber || 'KOSONG'}"`);
-      console.warn('⚠️ Server WhatsApp akan langsung menolak (401 / 428) jika menggunakan nomor contoh 6281234567890.');
-      console.warn('⚠️ ');
-      console.warn('⚠️ CARA MENGATASINYA DI COOLIFY:');
-      console.warn('⚠️ 1. Buka Coolify > Project > Environment Variables');
-      console.warn('⚠️ 2. Ganti PHONE_NUMBER_FOR_PAIRING dengan nomor WhatsApp bot Anda (misal: 628158722770)');
-      console.warn('⚠️ 3. Format: Kode negara tanpa spasi atau tanda + (contoh: 628xxx)');
-      console.warn('⚠️ 4. ATAU ubah USE_PAIRING_CODE=false jika Anda lebih suka login via Scan QR Code di logs.');
-      console.warn('⚠️ ========================================================\n');
-      await new Promise(resolve => setTimeout(resolve, 30000));
-      return startBot();
-    } else {
-      console.log(`\n⏳ Meminta 8-Digit Pairing Code untuk nomor: ${pairingNumber}...`);
-      setTimeout(async () => {
-        try {
-          const rawCode = await sock.requestPairingCode(pairingNumber);
-          const formattedCode = rawCode?.match(/.{1,4}/g)?.join('-') || rawCode;
-          latestPairingCode = formattedCode;
-          console.log('\n========================================================');
-          console.log('📱 TELCOLEARN 8-DIGIT PAIRING CODE:');
-          console.log(`👉   ${rawCode}   (Format: ${formattedCode})   👈`);
-          console.log('========================================================');
-          console.log('Panduan Login di Ponsel WhatsApp Anda:');
-          console.log('1. Buka Setelan WhatsApp > Perangkat Tertaut (Linked Devices)');
-          console.log('2. Pilih "Tautkan Perangkat" (Link a Device)');
-          console.log('3. Ketuk opsi bawah: "Tautkan dengan nomor telepon saja"');
-          console.log(`4. Masukkan kode: ${rawCode} atau ${formattedCode}`);
-          console.log('========================================================\n');
-        } catch (pairErr) {
-          console.error('❌ Gagal menghasilkan Pairing Code:', pairErr?.message || pairErr);
-        }
-      }, 3000);
-    }
+    console.log(`\n⏳ Meminta 8-Digit Pairing Code untuk nomor: ${pairingNumber}...`);
+    setTimeout(async () => {
+      try {
+        const rawCode = await sock.requestPairingCode(pairingNumber);
+        const formattedCode = rawCode?.match(/.{1,4}/g)?.join('-') || rawCode;
+        latestPairingCode = formattedCode;
+        console.log('\n========================================================');
+        console.log('📱 TELCOLEARN 8-DIGIT PAIRING CODE:');
+        console.log(`👉   ${rawCode}   (Format: ${formattedCode})   👈`);
+        console.log('========================================================');
+      } catch (pairErr) {
+        console.error('❌ Gagal menghasilkan Pairing Code:', pairErr?.message || pairErr);
+      }
+    }, 3000);
   }
 
   // 2. Simpan kredensial multi-file auth
@@ -361,8 +344,40 @@ function startWebServer() {
       res.end(JSON.stringify({
         status: botConnectionStatus,
         phone: botConnectedPhone,
+        cooldown: botCooldownInfo,
         timestamp: new Date().toISOString()
       }));
+      return;
+    }
+
+    // Endpoint reset / force QR baru
+    if (req.url === '/reset' || req.url === '/api/reset') {
+      console.log('🔄 [Web Portal] Tindakan Reset dipicu via web browser! Membersihkan lock dan sesi lama...');
+      clearCooldown();
+      botCooldownInfo = null;
+      botConnectionStatus = 'connecting';
+      latestQRDataUrl = null;
+      latestPairingCode = null;
+      try {
+        if (fs.existsSync(authFolder)) {
+          const files = fs.readdirSync(authFolder);
+          for (const f of files) {
+            fs.unlinkSync(path.join(authFolder, f));
+          }
+        }
+      } catch (e) {}
+
+      if (sockInstance) {
+        try {
+          sockInstance.ev.removeAllListeners();
+          sockInstance.ws?.terminate?.();
+          sockInstance.end?.();
+        } catch (e) {}
+        sockInstance = null;
+      }
+      setTimeout(startBot, 500);
+      res.writeHead(302, { Location: '/' });
+      res.end();
       return;
     }
 
@@ -379,7 +394,8 @@ function startWebServer() {
 
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     const isConnected = botConnectionStatus === 'connected';
-    const refreshSec = isConnected ? 60 : 6;
+    const isCooldown = botConnectionStatus === 'cooldown';
+    const refreshSec = isConnected ? 60 : (isCooldown ? 15 : 6);
     const html = `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -394,11 +410,15 @@ function startWebServer() {
     h1 { margin-top: 0; font-size: 24px; color: #38bdf8; letter-spacing: -0.5px; }
     .badge { display: inline-block; padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 700; margin-bottom: 24px; letter-spacing: 0.5px; }
     .badge-connecting { background: #854d0e; color: #fef08a; }
+    .badge-cooldown { background: #991b1b; color: #fecaca; }
     .badge-qr { background: #0369a1; color: #e0f2fe; }
     .badge-connected { background: #15803d; color: #dcfce7; }
     .qr-box { background: white; padding: 16px; border-radius: 16px; display: inline-block; margin: 12px auto; box-shadow: 0 10px 25px rgba(0,0,0,0.4); }
     .qr-box img { display: block; max-width: 280px; width: 100%; height: auto; border-radius: 8px; }
     .code-box { background: #0f172a; border: 2px dashed #38bdf8; border-radius: 12px; padding: 18px; margin: 20px 0; font-size: 30px; font-family: monospace; letter-spacing: 6px; color: #38bdf8; font-weight: bold; }
+    .btn { display: inline-block; padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; text-decoration: none; transition: background 0.2s; }
+    .btn-primary { background: #0284c7; color: white; box-shadow: 0 4px 14px rgba(2,132,199,0.4); }
+    .btn-secondary { background: #334155; color: #cbd5e1; font-size: 12px; padding: 8px 14px; }
     p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 12px 0; }
     .instructions { text-align: left; background: #0f172a; padding: 16px; border-radius: 12px; margin-top: 20px; border: 1px solid #334155; }
     .instructions ol { margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 13px; line-height: 1.8; }
@@ -412,6 +432,15 @@ function startWebServer() {
       <div class="badge badge-connected">🟢 BOT ONLINE & SIAP</div>
       <p style="font-size: 18px; color: #f8fafc; font-weight: 600;">Nomor Bot: +${botConnectedPhone}</p>
       <p>TelcoLearn engine aktif dan siap menjawab pertanyaan telekomunikasi, modul kurikulum, kuis, serta analisis RAG.</p>
+    ` : isCooldown ? `
+      <div class="badge badge-cooldown">🛑 PROTEKSI COOLDOWN AKTIF</div>
+      <p style="color: #fca5a5;">Engine mendeteksi penolakan otorisasi 401 sebelumnya.<br>Sisa waktu proteksi otomatis: <strong>${botCooldownInfo?.remainingMinutes || 60} menit</strong>.</p>
+      <div style="margin: 20px 0;">
+        <a href="/reset" class="btn btn-primary">
+          🔓 Reset Kunci & Munculkan QR Code Sekarang
+        </a>
+      </div>
+      <p style="font-size: 12px; color: #94a3b8;">Klik tombol di atas untuk mereset kunci pengaman dan meminta QR Code baru ke WhatsApp.</p>
     ` : latestQRDataUrl ? `
       <div class="badge badge-qr">📲 SCAN QR CODE WHATSAPP</div>
       <p>Pindai QR Code di bawah menggunakan kamera WhatsApp di ponsel Anda:</p>
@@ -425,7 +454,12 @@ function startWebServer() {
           <li>Pilih <strong>Tautkan Perangkat</strong> lalu arahkan kamera ke QR Code di atas</li>
         </ol>
       </div>
-      <p style="font-size: 12px; color: #64748b; margin-top: 14px;">Halaman me-refresh otomatis setiap 6 detik.</p>
+      <div style="margin-top: 16px;">
+        <a href="/reset" class="btn btn-secondary">
+          🔄 QR Code Expired? Klik untuk QR Baru
+        </a>
+      </div>
+      <p style="font-size: 12px; color: #64748b; margin-top: 8px;">Halaman me-refresh otomatis setiap 6 detik.</p>
     ` : latestPairingCode ? `
       <div class="badge badge-qr">📱 KODE PAIRING 8-DIGIT</div>
       <p>Masukkan kode berikut di WhatsApp ponsel Anda:</p>
@@ -437,9 +471,19 @@ function startWebServer() {
           <li>Masukkan 8-digit kode di atas</li>
         </ol>
       </div>
+      <div style="margin-top: 16px;">
+        <a href="/reset" class="btn btn-secondary">
+          🔄 Ganti ke Scan QR Code
+        </a>
+      </div>
     ` : `
       <div class="badge badge-connecting">⏳ MENGHUBUNGKAN KE WHATSAPP...</div>
       <p>Sedang memuat protokol Baileys. Kode QR atau Pairing Code akan muncul di sini secara otomatis dalam beberapa detik...</p>
+      <div style="margin-top: 20px;">
+        <a href="/reset" class="btn btn-primary">
+          ⚡ Paksa Buat QR Code Baru
+        </a>
+      </div>
     `}
     <div class="footer">TelcoLearn Engine v3.0.0 &bull; Powered by Baileys & Gemini 3 Flash</div>
   </div>
