@@ -30,6 +30,7 @@ import {
   isObviousNonTelcoQuery
 } from '../config/constants.js';
 import { analyzeTelcoLog, answerGeneralTelcoQuestion, analyzeTelcoImage, analyzeTelcoDocument } from './geminiService.js';
+import { generateTelcoSimulation } from './simulationService.js';
 import { sendSafeReply } from './antiBanService.js';
 import { formatWhatsAppAdminReport, sendDailyEmailReport } from './reportingService.js';
 
@@ -39,7 +40,7 @@ export const lidMap = new Map();
 // Set untuk melacak ID pesan yang dikirim oleh bot agar tidak merespons balasan sendiri (anti-loop)
 export const sentMessageIds = new Set();
 
-export const LOOPBACK_FOOTER = '\n\n────────────────────────\n☕ Untuk support bisa ke https://saweria.co/TelcoLearn\n💡 _Ketik *0* (atau */menu*) untuk menu utama, atau langsung ajukan pertanyaan berikutnya._';
+export const LOOPBACK_FOOTER = '\n\n────────────────────────\n☕ Dukung kami: https://saweria.co/TelcoLearn\n💡 _Ketik */simulasi* untuk melihat grafik/diagram topik ini, atau *0* untuk menu utama._';
 
 /**
  * Normalisasi nomor telepon internasional (diadopsi dari ai-reception-zeroweb)
@@ -659,6 +660,42 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
     // Shortcut 5 -> /bantuan
     if (lowerText === '/bantuan' || lowerText === '/help' || lowerText === 'bantuan' || lowerText === 'help' || lowerText === '5') {
       await reply({ text: `${MESSAGES.HELP}${LOOPBACK_FOOTER}` });
+      return;
+    }
+
+    // 6.4. SIMULASI & DIAGRAM VISUAL (/simulasi, /gambar, /visualisasi, atau permintaan teks natural)
+    const isSimulationTrigger = (
+      /^(\/(simulasi|gambar|visualisasi|diagram|grafik)\b|.*?\b(buat(kan)?|bikin|minta|tampilkan|perlihatkan|generate)\s*(gambar|simulasi|diagram|grafik|kurva|visualisasi)|.*?\b(gambarkan|simulasikan|visualisasikan)\b|.*?\b(ada|bisa)\s*(minta|buat(kan)?|lihat|tampilkan)?\s*(gambar|simulasi|diagram|grafik))/i.test(rawText)
+    );
+
+    if (isSimulationTrigger) {
+      const customPrompt = rawText
+        .replace(/^\/(simulasi|gambar|visualisasi|diagram|grafik)\s*/i, '')
+        .replace(/\b(tolong|bisa|coba|dong|ya|kan|kah)?\s*(buat(kan)?|bikin|minta|tampilkan|perlihatkan|generate)?\s*(gambar(nya)?|simulasi(nya)?|visualisasi(nya)?|diagram(nya)?|grafik(nya)?)\s*(dong|ya|kan|ini|kasus ini|dari jawaban tadi|dari pertanyaan tadi)?\b/gi, '')
+        .trim();
+
+      await reply({
+        text: `🎨 *Merancang simulasi visual...*\nMemproses kalkulasi RF & merender diagram teknis via AI...`
+      });
+
+      try {
+        const simResult = await generateTelcoSimulation(user.id, customPrompt);
+        if (simResult && simResult.image) {
+          await reply({
+            image: simResult.image,
+            caption: `${simResult.caption}${LOOPBACK_FOOTER}`
+          });
+        } else {
+          await reply({
+            text: `⚠️ Maaf, belum dapat merender gambar simulasi untuk topik ini saat ini.${LOOPBACK_FOOTER}`
+          });
+        }
+      } catch (simErr) {
+        console.error('❌ Gagal menghasilkan simulasi visual:', simErr);
+        await reply({
+          text: `⚠️ Terjadi kendala saat merender simulasi: ${simErr.message}${LOOPBACK_FOOTER}`
+        });
+      }
       return;
     }
 

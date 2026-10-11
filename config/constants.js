@@ -222,7 +222,9 @@ Pilih opsi di bawah _(cukup ketik angka 1 - 5 atau perintahnya)_:
 4️⃣ */profil* - Pengaturan track & jadwal reminder
 5️⃣ */bantuan* - Panduan penggunaan bot
 
-💡 *Tips Pro:* Langsung *forward/paste cuplikan error log QXDM/PCAP* atau tanyakan konsep radio apa saja ke sini!
+💡 *Tips Pro:*
+• Ketik */simulasi* untuk melihat grafik simulasi RF & diagram visual dari topik yang baru saja dibahas!
+• Langsung *forward/paste cuplikan error log QXDM/PCAP* atau tanyakan konsep radio apa saja ke sini!
 _(Ketik *0* kapan saja untuk kembali ke menu ini)_`,
 
   HELP: `📖 *PANDUAN PENGGUNAAN TELCOLEARN*
@@ -233,6 +235,7 @@ TelcoLearn adalah bot pendamping pembelajaran 3GPP & diagnosis protokol radio.
 • */menu* - Membuka menu interaktif
 • */belajar* - Mengirim materi micro-learning 3 menit
 • */quiz* - Membuka kuis pilihan ganda
+• */simulasi* - Membuat grafik simulasi RF / diagram visual kasus yang dibahas
 • */batal* - Membatalkan sesi kuis atau pencatatan
 • */streak* - Menampilkan rekor konsistensi belajar
 • */track [1/2/3]* - Mengganti jalur fokus materi (QA, Drive Test, ML)

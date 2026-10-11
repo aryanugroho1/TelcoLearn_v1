@@ -24,7 +24,7 @@ function getClient() {
 /**
  * Execute Gemini model with timeout protection (8000 ms) and multi-version SDK compatibility
  */
-async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_INSTRUCTION, options = {}) {
+export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_INSTRUCTION, options = {}) {
   const client = getClient();
   if (!client) {
     return {
