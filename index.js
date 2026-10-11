@@ -5,6 +5,7 @@
  */
 
 import 'dotenv/config';
+import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -57,6 +58,12 @@ import {
 let sockInstance = null;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
+
+// Web Gateway state variables (untuk live QR portal di browser Coolify)
+let latestQRDataUrl = null;
+let latestPairingCode = null;
+let botConnectionStatus = 'connecting'; // 'connecting' | 'qr_ready' | 'connected'
+let botConnectedPhone = null;
 
 async function startBot() {
   console.log('\n========================================================');
@@ -148,6 +155,7 @@ async function startBot() {
         try {
           const rawCode = await sock.requestPairingCode(pairingNumber);
           const formattedCode = rawCode?.match(/.{1,4}/g)?.join('-') || rawCode;
+          latestPairingCode = formattedCode;
           console.log('\n========================================================');
           console.log('📱 TELCOLEARN 8-DIGIT PAIRING CODE:');
           console.log(`👉   ${rawCode}   (Format: ${formattedCode})   👈`);
@@ -172,16 +180,23 @@ async function startBot() {
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
-    if (qr && !usePairingCode) {
-      console.log('📲 Pindai QR Code berikut menggunakan WhatsApp Anda:');
-      qrcode.generate(qr, { small: true });
-
-      const qrPngPath = path.join(__dirname, 'qrcode.png');
+    if (qr) {
+      botConnectionStatus = 'qr_ready';
       try {
-        await QRCode.toFile(qrPngPath, qr, { width: 500, margin: 2 });
-        console.log(`\n📷 QR Code PNG resolusi tinggi berhasil disimpan ke:\n   👉 ${qrPngPath}\n`);
-      } catch (qrErr) {
-        console.error('Gagal menyimpan file qrcode.png:', qrErr);
+        latestQRDataUrl = await QRCode.toDataURL(qr, { width: 340, margin: 2 });
+      } catch (e) {}
+
+      if (!usePairingCode) {
+        console.log('📲 Pindai QR Code berikut menggunakan WhatsApp Anda:');
+        qrcode.generate(qr, { small: true });
+
+        const qrPngPath = path.join(__dirname, 'qrcode.png');
+        try {
+          await QRCode.toFile(qrPngPath, qr, { width: 500, margin: 2 });
+          console.log(`\n📷 QR Code PNG resolusi tinggi berhasil disimpan ke:\n   👉 ${qrPngPath}\n`);
+        } catch (qrErr) {
+          console.error('Gagal menyimpan file qrcode.png:', qrErr);
+        }
       }
     }
 
@@ -246,6 +261,10 @@ async function startBot() {
 
     } else if (connection === 'open') {
       reconnectAttempts = 0;
+      botConnectionStatus = 'connected';
+      botConnectedPhone = sock.user?.id ? sock.user.id.split(':')[0].replace(/@.*/, '') : 'Aktif';
+      latestQRDataUrl = null;
+      latestPairingCode = null;
       console.log('\n========================================================');
       console.log('✅ TelcoLearn Bot BERHASIL TERHUBUNG ke WhatsApp Protocol!');
       console.log(`👤 JID Akun: ${sock.user?.id || 'Connected'}`);
@@ -330,6 +349,112 @@ process.on('SIGTERM', () => {
   stopScheduler();
   process.exit(0);
 });
+
+// ----------------------------------------------------
+// 6. Web Gateway Portal (Live QR Code & Healthcheck UI)
+// ----------------------------------------------------
+function startWebServer() {
+  const HTTP_PORT = process.env.PORT || 3000;
+  const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/api/status') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: botConnectionStatus,
+        phone: botConnectedPhone,
+        timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+
+    if (req.url === '/qr.png' && latestQRDataUrl) {
+      const base64Data = latestQRDataUrl.replace(/^data:image\/png;base64,/, '');
+      const imgBuffer = Buffer.from(base64Data, 'base64');
+      res.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Content-Length': imgBuffer.length
+      });
+      res.end(imgBuffer);
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    const isConnected = botConnectionStatus === 'connected';
+    const refreshSec = isConnected ? 60 : 6;
+    const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TelcoLearn WhatsApp Gateway</title>
+  <meta http-equiv="refresh" content="${refreshSec}">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+    .card { background: #1e293b; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); padding: 36px; max-width: 480px; width: 100%; text-align: center; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 24px; color: #38bdf8; letter-spacing: -0.5px; }
+    .badge { display: inline-block; padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 700; margin-bottom: 24px; letter-spacing: 0.5px; }
+    .badge-connecting { background: #854d0e; color: #fef08a; }
+    .badge-qr { background: #0369a1; color: #e0f2fe; }
+    .badge-connected { background: #15803d; color: #dcfce7; }
+    .qr-box { background: white; padding: 16px; border-radius: 16px; display: inline-block; margin: 12px auto; box-shadow: 0 10px 25px rgba(0,0,0,0.4); }
+    .qr-box img { display: block; max-width: 280px; width: 100%; height: auto; border-radius: 8px; }
+    .code-box { background: #0f172a; border: 2px dashed #38bdf8; border-radius: 12px; padding: 18px; margin: 20px 0; font-size: 30px; font-family: monospace; letter-spacing: 6px; color: #38bdf8; font-weight: bold; }
+    p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 12px 0; }
+    .instructions { text-align: left; background: #0f172a; padding: 16px; border-radius: 12px; margin-top: 20px; border: 1px solid #334155; }
+    .instructions ol { margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 13px; line-height: 1.8; }
+    .footer { margin-top: 24px; font-size: 12px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>📡 TelcoLearn WhatsApp Gateway</h1>
+    ${isConnected ? `
+      <div class="badge badge-connected">🟢 BOT ONLINE & SIAP</div>
+      <p style="font-size: 18px; color: #f8fafc; font-weight: 600;">Nomor Bot: +${botConnectedPhone}</p>
+      <p>TelcoLearn engine aktif dan siap menjawab pertanyaan telekomunikasi, modul kurikulum, kuis, serta analisis RAG.</p>
+    ` : latestQRDataUrl ? `
+      <div class="badge badge-qr">📲 SCAN QR CODE WHATSAPP</div>
+      <p>Pindai QR Code di bawah menggunakan kamera WhatsApp di ponsel Anda:</p>
+      <div class="qr-box">
+        <img src="${latestQRDataUrl}" alt="WhatsApp QR Code">
+      </div>
+      <div class="instructions">
+        <ol>
+          <li>Buka WhatsApp di ponsel Anda</li>
+          <li>Ketuk <strong>Titik Tiga</strong> (atau Pengaturan) &gt; <strong>Perangkat Tertaut</strong></li>
+          <li>Pilih <strong>Tautkan Perangkat</strong> lalu arahkan kamera ke QR Code di atas</li>
+        </ol>
+      </div>
+      <p style="font-size: 12px; color: #64748b; margin-top: 14px;">Halaman me-refresh otomatis setiap 6 detik.</p>
+    ` : latestPairingCode ? `
+      <div class="badge badge-qr">📱 KODE PAIRING 8-DIGIT</div>
+      <p>Masukkan kode berikut di WhatsApp ponsel Anda:</p>
+      <div class="code-box">${latestPairingCode}</div>
+      <div class="instructions">
+        <ol>
+          <li>Buka WhatsApp &gt; <strong>Perangkat Tertaut</strong> &gt; <strong>Tautkan Perangkat</strong></li>
+          <li>Pilih opsi bawah: <strong>"Tautkan dengan nomor telepon saja"</strong></li>
+          <li>Masukkan 8-digit kode di atas</li>
+        </ol>
+      </div>
+    ` : `
+      <div class="badge badge-connecting">⏳ MENGHUBUNGKAN KE WHATSAPP...</div>
+      <p>Sedang memuat protokol Baileys. Kode QR atau Pairing Code akan muncul di sini secara otomatis dalam beberapa detik...</p>
+    `}
+    <div class="footer">TelcoLearn Engine v3.0.0 &bull; Powered by Baileys & Gemini 3 Flash</div>
+  </div>
+</body>
+</html>`;
+    res.end(html);
+  });
+
+  server.listen(HTTP_PORT, '0.0.0.0', () => {
+    console.log(`🌐 [Web Gateway] TelcoLearn Web Portal aktif di: http://0.0.0.0:${HTTP_PORT}`);
+  });
+}
+
+// Jalankan Web Portal Portal Port 3000
+startWebServer();
 
 // Jalankan Bot
 startBot().catch((err) => {

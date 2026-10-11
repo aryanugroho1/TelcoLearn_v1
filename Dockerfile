@@ -24,8 +24,8 @@ COPY . .
 # Ensure runtime directories exist for volumes
 RUN mkdir -p /app/auth_info_baileys /app/database /app/reports
 
-# Declare persistent volumes
-VOLUME ["/app/auth_info_baileys", "/app/database", "/app/reports"]
+# Expose HTTP Web Gateway (QR Code portal & healthcheck)
+EXPOSE 3000
 
 # Start the TelcoLearn Baileys + Gemini daemon
 CMD ["node", "index.js"]

@@ -20,3 +20,5 @@ services:
     # Enable terminal stdin & tty so QR code or 8-digit pairing code can render in docker logs
     tty: true
     stdin_open: true
+    ports:
+      - "3000:3000"
