@@ -34,14 +34,20 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
     };
   }
 
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
-  const candidateModels = Array.from(new Set([
-    primaryModel,
-    'gemini-3.1-flash-lite',
-    'gemini-flash-lite-latest',
-    'gemini-3.5-flash-lite',
-    'gemini-3.8-flash'
-  ]));
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
+  const candidateModels = options.isLogAnalysis
+    ? Array.from(new Set([
+        'gemini-3.1-flash-lite',
+        'gemini-flash-lite-latest',
+        'gemini-3.5-flash-lite',
+        primaryModel
+      ]))
+    : Array.from(new Set([
+        primaryModel,
+        'gemini-flash-lite-latest',
+        'gemini-3.1-flash-lite',
+        'gemini-3.5-flash-lite'
+      ]));
   const timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS || '35000', 10);
 
   let timer = null;
@@ -158,8 +164,8 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
                             errMsg.includes('RESOURCE_EXHAUSTED');
 
         if (isTransient && attempt <= MAX_RETRIES) {
-          const delayMs = attempt * 1500 + Math.floor(Math.random() * 500);
-          console.warn(`⚠️ [Gemini Transient ${statusCode || '503'}] Server Google sedang antre/padat. Percobaan ${attempt}/${MAX_RETRIES} gagal. Mencoba ulang otomatis dalam ${delayMs}ms...`);
+          const delayMs = 300 + Math.floor(Math.random() * 200);
+          console.warn(`⚠️ [Gemini Transient ${statusCode || '503'}] Server Google antre/padat. Mengalihkan instan ke model cadangan dalam ${delayMs}ms (Percobaan ${attempt}/${MAX_RETRIES})...`);
           await new Promise(r => setTimeout(r, delayMs));
           continue;
         }

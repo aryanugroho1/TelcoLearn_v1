@@ -347,7 +347,7 @@ export function getDailyTokenMetrics(targetDate = null) {
       COALESCE(SUM(output_tokens), 0) as total_output_tokens,
       COALESCE(SUM(total_tokens), 0) as total_tokens,
       COUNT(DISTINCT user_id) as active_users,
-      COALESCE(AVG(latency_ms), 0) as avg_latency
+      COALESCE(AVG(CASE WHEN latency_ms < 60000 AND latency_ms > 0 THEN latency_ms END), 0) as avg_latency
     FROM llm_conversation_logs
     WHERE DATE(created_at, 'localtime') = ${dateClause}
   `).get(...dateParam);
