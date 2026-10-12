@@ -128,20 +128,16 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
 CREATE INDEX IF NOT EXISTS idx_kb_topic ON knowledge_base(topic_key);
 CREATE INDEX IF NOT EXISTS idx_kb_category ON knowledge_base(category);
 
--- 9. TABEL MASUKAN & SARAN PENGGUNA (user_feedbacks)
+-- 9. TABEL MASUKAN & SARAN PENGGUNA (user_feedbacks - STRICTLY CONFIDENTIAL & ANONYMOUS)
 CREATE TABLE IF NOT EXISTS user_feedbacks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    user_jid TEXT NOT NULL,
-    phone_number TEXT,
     feedback_text TEXT NOT NULL,
     category TEXT DEFAULT 'general',           -- 'general', 'feature_request', 'bug_report', 'curriculum'
     status TEXT DEFAULT 'PENDING',              -- 'PENDING', 'REVIEWED', 'IMPLEMENTED'
     admin_notes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_feedbacks_user ON user_feedbacks(user_id);
 CREATE INDEX IF NOT EXISTS idx_feedbacks_status ON user_feedbacks(status);
+
 

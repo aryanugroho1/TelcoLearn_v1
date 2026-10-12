@@ -525,9 +525,6 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
       }
 
       saveUserFeedback({
-        userId: user.id,
-        userJid: user.jid,
-        phoneNumber: user.phone_number,
         feedbackText: rawText,
         category: 'general'
       });
@@ -718,9 +715,6 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
       }
 
       saveUserFeedback({
-        userId: user.id,
-        userJid: user.jid,
-        phoneNumber: user.phone_number,
         feedbackText: inlineFeedback,
         category: 'general'
       });
@@ -815,11 +809,8 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
 
         const fbListText = feedbacks.map((f, idx) => {
           const dateStr = new Date(f.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-          const senderLabel = f.display_name
-            ? `${f.display_name} (${f.phone_number || f.user_jid.split('@')[0]})`
-            : (f.phone_number || f.user_jid.split('@')[0]);
           const statusBadge = f.status === 'PENDING' ? '⏳ PENDING' : f.status === 'REVIEWED' ? '👀 REVIEWED' : '✅ SELESAI';
-          return `*${idx + 1}. [#${f.id}]* _${dateStr}_\n👤 *Pengirim:* ${senderLabel}\n📝 *Pesan:* "${f.feedback_text}"\n🏷️ *Status:* ${statusBadge}`;
+          return `*${idx + 1}. [#${f.id}]* _${dateStr}_\n📝 *Masukan:* "${f.feedback_text}"\n🏷️ *Status:* ${statusBadge}`;
         }).join('\n\n');
 
         const header = `📬 *DAFTAR MASUKAN PENGGUNA (FEEDBACK)*\nTotal: *${fbMetrics.total} Masukan* (⏳ *${fbMetrics.pending} Pending*)\nMenampilkan ${feedbacks.length} masukan terbaru:\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;

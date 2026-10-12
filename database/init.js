@@ -65,22 +65,17 @@ export function initializeDatabase() {
     console.warn('ℹ️ Migrasi kolom token tracking dilewati:', migErr.message);
   }
 
-  // 5. Pastikan tabel user_feedbacks ada
+  // 5. Pastikan tabel user_feedbacks ada (Confidential & Anonymous)
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS user_feedbacks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        user_jid TEXT NOT NULL,
-        phone_number TEXT,
         feedback_text TEXT NOT NULL,
         category TEXT DEFAULT 'general',
         status TEXT DEFAULT 'PENDING',
         admin_notes TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
-      CREATE INDEX IF NOT EXISTS idx_feedbacks_user ON user_feedbacks(user_id);
       CREATE INDEX IF NOT EXISTS idx_feedbacks_status ON user_feedbacks(status);
     `);
   } catch (fbErr) {

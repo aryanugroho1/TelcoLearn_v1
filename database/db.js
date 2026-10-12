@@ -498,35 +498,28 @@ export function getAllKnowledgeTopics() {
  * ----------------------------------------------------
  */
 
-export function saveUserFeedback({ userId, userJid, phoneNumber, feedbackText, category = 'general' }) {
+export function saveUserFeedback({ feedbackText, category = 'general' }) {
   const db = getDb();
-  let validUserId = null;
-  if (userId && Number(userId) > 0) {
-    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
-    if (user) validUserId = user.id;
-  }
-
   const stmt = db.prepare(`
-    INSERT INTO user_feedbacks (user_id, user_jid, phone_number, feedback_text, category, status)
-    VALUES (?, ?, ?, ?, ?, 'PENDING')
+    INSERT INTO user_feedbacks (feedback_text, category, status)
+    VALUES (?, ?, 'PENDING')
   `);
-  const result = stmt.run(validUserId, userJid, phoneNumber || '', feedbackText.trim(), category);
+  const result = stmt.run(feedbackText.trim(), category);
   return result.lastInsertRowid;
 }
 
 export function getAllFeedbacks({ limit = 10, offset = 0, status = null } = {}) {
   const db = getDb();
   let query = `
-    SELECT f.*, u.display_name 
-    FROM user_feedbacks f
-    LEFT JOIN users u ON f.user_id = u.id
+    SELECT id, feedback_text, category, status, created_at
+    FROM user_feedbacks
   `;
   const params = [];
   if (status) {
-    query += ' WHERE f.status = ?';
+    query += ' WHERE status = ?';
     params.push(status);
   }
-  query += ' ORDER BY f.created_at DESC LIMIT ? OFFSET ?';
+  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
   params.push(Number(limit) || 10, Number(offset) || 0);
   return db.prepare(query).all(...params);
 }
