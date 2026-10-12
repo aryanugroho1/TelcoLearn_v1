@@ -22,7 +22,7 @@ RUN npm ci --omit=dev || npm install --omit=dev
 COPY . .
 
 # Ensure runtime directories exist for volumes
-RUN mkdir -p /app/auth_info_baileys /app/database /app/reports
+RUN mkdir -p /app/auth_info_baileys /app/data /app/database /app/reports
 
 # Expose HTTP Web Gateway (QR Code portal & healthcheck)
 EXPOSE 3000

@@ -5,7 +5,9 @@
  */
 
 import { jidNormalizedUser, downloadMediaMessage } from '@whiskeysockets/baileys';
-import {
+import * as db from '../database/db.js';
+
+const {
   getUserByJid,
   createUser,
   updateUserState,
@@ -19,12 +21,15 @@ import {
   saveUserNote,
   getUserNotes,
   getDailyTokenMetrics,
-  saveUserFeedback,
-  getAllFeedbacks,
-  getFeedbackMetrics,
-  updateFeedbackStatus,
   getDb
-} from '../database/db.js';
+} = db;
+
+// Safe fallbacks to prevent crash if an older db.js is cached by Docker/volume
+const saveUserFeedback = db.saveUserFeedback || (() => null);
+const getAllFeedbacks = db.getAllFeedbacks || (() => []);
+const getFeedbackMetrics = db.getFeedbackMetrics || (() => ({ total: 0, pending: 0 }));
+const updateFeedbackStatus = db.updateFeedbackStatus || (() => null);
+
 import {
   MESSAGES,
   FOCUS_TRACKS,

@@ -11,9 +11,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const legacyDbPath = path.join(__dirname, 'telcolearn.db');
+const dataDirDbPath = path.resolve(__dirname, '..', 'data', 'telcolearn.db');
+
 const dbPath = process.env.DATABASE_PATH 
   ? path.resolve(__dirname, '..', process.env.DATABASE_PATH)
-  : path.join(__dirname, 'telcolearn.db');
+  : (fs.existsSync(dataDirDbPath) ? dataDirDbPath : legacyDbPath);
 
 // Ensure database directory exists
 const dbDir = path.dirname(dbPath);
