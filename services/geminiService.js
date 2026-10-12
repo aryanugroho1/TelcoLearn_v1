@@ -305,15 +305,36 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
   }
 
   // 3. Perspectives & Instructions
+  // 3. Dynamic Chameleon Perspective & Domain Detection
+  const lowerQ = question.toLowerCase();
+  const isCoreDomain = /\b(5gc|amf|smf|upf|pcf|udm|ausf|nrf|nssf|nef|sba|epc|mme|sgw|pgw|hss|ims|sip|sdp|volte|vonr|n2|n3|n4|s1-mme|s1-u|diameter|pdu session|qos flow|5qi|qci)\b/i.test(lowerQ);
+  const isRanOptDomain = /\b(kpi|counter|oss|netact|enm|u2020|mae|prb|retainability|accessibility|drop rate|packet loss|throughput|handover success|hosr|sinr|cqi|bler|tilt|azimuth|cluster|neighbor|pci conflict|congestion)\b/i.test(lowerQ);
+  const isIntegrationDomain = /\b(commissioning|integrasi|site down|cell down|bbu|rru|aau|vswr|ret|sfp|cabling|fiber optic|cpri|ecpri|s1 link|x2 link|ng link|xn link|board alarm|hardware alarm)\b/i.test(lowerQ);
+  const isCemDomain = /\b(cem|soc|qoe|customer experience|user experience|video stall|buffering|latency game|gaming latency|mos score|vip complaint|komplain pelanggan|pelanggan komplain)\b/i.test(lowerQ);
+  const isPracticalIssue = /\b(di site|di lapangan|di kantor|lagi ada issue|troubleshoot|mengatasi|solusinya|penyebabnya|kenapa bisa|gimana cara|cara benerin|ticket|komplain)\b/i.test(lowerQ);
+
   let trackContextInstruction = '';
-  if (contextTrack === 'drive_test') {
-    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan secara mendalam dari sudut pandang *Field & Drive Test* (pengukuran RF di rute pengujian lapangan, analisis parameter RSRP/RSRQ/SINR/BLER di jalan, penggunaan tool lapangan seperti TEMS/Nemo/Scanner, physical cell issues seperti overshooting/antenna tilt/azimuth/cross feeder, handover coverage di rute perjalanan, dan optimasi radio lapangan).`;
+  if (isCoreDomain) {
+    trackContextInstruction = `\n\nPERSPEKTIF DOMAIN UTAMA:\nTinjau kasus/pertanyaan ini dari sudut pandang *Core Network Specialist & Signaling Architect* (analisis alur Control/User Plane, interkoneksi antarmuka N2/N3/N4/S1, session management, dan routing IMS/5GC).`;
+  } else if (isRanOptDomain) {
+    trackContextInstruction = `\n\nPERSPEKTIF DOMAIN UTAMA:\nTinjau kasus/pertanyaan ini dari sudut pandang *RAN Performance & Optimization (RPO) Lead* (analisis formula KPI OSS, utilisasi PRB, cluster tuning, parameter radio, dan counter vendor Nokia NetAct/Ericsson ENM/Huawei).`;
+  } else if (isIntegrationDomain) {
+    trackContextInstruction = `\n\nPERSPEKTIF DOMAIN UTAMA:\nTinjau kasus/pertanyaan ini dari sudut pandang *RAN Integration & Commissioning Engineer* (troubleshooting praktis hardware BBU/RRU, alarm link transport S1/NG/Xn, alarm VSWR/RET, dan verifikasi operasional site).`;
+  } else if (isCemDomain) {
+    trackContextInstruction = `\n\nPERSPEKTIF DOMAIN UTAMA:\nTinjau kasus/pertanyaan ini dari sudut pandang *Customer Experience Management (CEM) & SOC Lead* (analisis dampak End-to-End QoE, video streaming/VoLTE MOS, korelasi degradasi jaringan terhadap komplain pengguna, dan SLA service).`;
+  } else if (contextTrack === 'drive_test') {
+    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan dari sudut pandang *Field & Drive Test* (pengukuran RF di rute pengujian lapangan, analisis parameter RSRP/RSRQ/SINR/BLER di jalan, penggunaan tool lapangan seperti TEMS/Nemo/Scanner, physical cell issues, dan optimasi radio lapangan).`;
   } else if (contextTrack === 'protocol_qa') {
-    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan secara mendalam dari sudut pandang *4G/5G Protocol QA & Lab Testing* (analisis signaling Layer 3 RRC/NAS, decoding trace modem QXDM/Shannon/PCAP, cause code 3GPP, timers radio T300/T310/T311, dan validasi kepatuhan spesifikasi 3GPP).`;
+    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan dari sudut pandang *4G/5G Wireless Protocol QA & Lab Testing* (Layer 3 RRC/NAS, decoding trace modem QXDM/Shannon/PCAP, cause code 3GPP, timers radio, dan validasi standar 3GPP).`;
   } else if (contextTrack === 'ml_telco') {
-    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan secara mendalam dari sudut pandang *Machine Learning Telco Testing* (penerapan data science/AI, deteksi anomali time-series KPI radio, regresi prediktif performa UE/thermal, dan otomatisasi triage log).`;
+    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan dari sudut pandang *Machine Learning Telco Testing* (penerapan data science/AI, deteksi anomali time-series KPI radio, regresi prediktif performa UE/thermal, dan otomatisasi triage log).`;
   } else if (contextTrack === 'log_telco') {
-    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan secara mendalam dari sudut pandang *Log Analysis & Modem Triage* (decoding log QXDM, Shannon, Wireshark PCAP trace, analisis Root Cause Analysis (RCA), failure cause code, paket 0xB0C0, 0xB801, 0xB821, crash stack triage, dan parameter log penting yang perlu diverifikasi).`;
+    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan dari sudut pandang *Log Analysis & Modem Triage* (decoding log QXDM, Shannon, Wireshark PCAP trace, analisis Root Cause Analysis (RCA), failure cause code, paket 0xB0C0, 0xB801, 0xB821, crash stack triage, dan parameter log penting yang perlu diverifikasi).`;
+  }
+
+  if (isPracticalIssue) {
+    trackContextInstruction += `\n\nPANDUAN PRAKTIKAL (SENIOR TECH LEAD MENTOR):
+Pengguna terindikasi sedang menghadapi studi kasus atau masalah pekerjaan nyata di lapangan/kantor. Berikan jawaban to-the-point dengan 'Actionable Troubleshooting Checklist' yang konkret, terstruktur, dan langsung dapat dicek oleh engineer di sistem/lapangan tanpa menggurui secara textbook.`;
   }
 
   const languageInstruction = `\n\nKETENTUAN BAHASA (BILINGUAL MANDATORY):
@@ -340,8 +361,9 @@ INSTRUKSI KESINAMBUNGAN KASUS (STRICT CONTINUITY):
 1. JAWABLAH pertanyaan di atas SECARA SPESIFIK DALAM KERANGKA KASUS DI ATAS ("${lastTopic}").
 2. Jika pertanyaan membandingkan arsitektur atau protokol (misal: "apakah ini 5G SA atau NSA?"), jelaskan secara spesifik bagaimana kasus tersebut bermanifestasi pada masing-masing skenario (misal: pada 5G NSA karena keterbatasan 4G anchor leg / split bearer X2 buffer delay vs pada 5G SA karena cell loading, alokasi PRB, atau core network).
 3. DILARANG KERAS mengabaikan use case di atas dan hanya menjelaskan definisi teori umum yang lepas dari konteks kasus!
-4. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan heading markdown '#' atau tabel markdown.
-5. KERAHASIAAN SUMBER: JANGAN menyebutkan kata "ShareTechNote", "database", atau sumber internal.${trackContextInstruction}${languageInstruction}`;
+4. LARANGAN DEKLARASI JABATAN ROBOTIK: JANGAN membuka jawaban dengan deklarasi jabatan robotik ("Sebagai Principal Wireless Protocol QA...", "Sebagai Core Engineer..."). Mulailah secara natural dan profesional.
+5. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan heading markdown '#' atau tabel markdown.
+6. KERAHASIAAN SUMBER: JANGAN menyebutkan kata "ShareTechNote", "database", atau sumber internal.${trackContextInstruction}${languageInstruction}`;
   } else if (kbMatch) {
     userTurnText = `Pertanyaan dari pelajar:
 "${question}"
@@ -352,21 +374,24 @@ ${kbMatch.core_content}
 Instruksi Menjawab:
 1. Jawab pertanyaan pelajar secara komprehensif, teknis, dan presisi mengacu pada konteks teknis di atas dan spesifikasi 3GPP terkini.
 2. KERAHASIAAN SUMBER: JANGAN PERNAH menyebutkan kata "ShareTechNote", "database", "knowledge base", "basis data", "RAG", "Gemini", atau sumber data internal dalam teks jawaban. Penerima pesan tidak perlu dan tidak boleh tahu asal usul jawaban. Jawab langsung secara alami tanpa kalimat klise seperti "Berdasarkan referensi/database...".
-3. Jika pertanyaan menyangkut alur/proses (seperti call flow, signal acquisition, RAR, registration), WAJIB gunakan format urutan step-by-step yang rapi dan terstruktur (1️⃣, 2️⃣, 3️⃣ atau 1, 2, 3).
-4. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) / RNTI / Timer penting jika relevan.
-5. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan markdown heading '#' atau format tabel markdown.
-6. JANGAN menyertakan URL link luar. Berikan penjelasan mandiri yang lengkap, tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
+3. LARANGAN DEKLARASI JABATAN ROBOTIK: JANGAN membuka jawaban dengan deklarasi jabatan robotik ("Sebagai Principal Wireless Protocol QA...", "Sebagai Core Engineer..."). Mulailah secara natural dan profesional.
+4. Jika pertanyaan menyangkut alur/proses (seperti call flow, signal acquisition, RAR, registration), WAJIB gunakan format urutan step-by-step yang rapi dan terstruktur (1️⃣, 2️⃣, 3️⃣ atau 1, 2, 3).
+5. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) / RNTI / Timer penting jika relevan.
+6. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan markdown heading '#' atau format tabel markdown.
+7. JANGAN menyertakan URL link luar. Berikan penjelasan mandiri yang lengkap, tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
   } else {
     userTurnText = `Pertanyaan dari pelajar:
 "${question}"
 
 Instruksi Menjawab:
-1. Jawablah secara profesional, mendalam, dan akurat berdasarkan spesifikasi 3GPP (Rel-15 s/d Rel-18), praktik vendor RAN (Nokia, Ericsson, Huawei, ZTE), Cellular IoT, dan standar telekomunikasi terkini.
+1. Jawablah secara profesional, mendalam, dan akurat berdasarkan spesifikasi 3GPP (Rel-15 s/d Rel-18), praktik vendor RAN (Nokia, Ericsson, Huawei, ZTE), Core Network, Cellular IoT, dan standar telekomunikasi terkini.
 2. KERAHASIAAN SUMBER: JANGAN PERNAH menyebutkan kata "ShareTechNote", "database", "knowledge base", "basis data", "RAG", "Gemini", atau sumber data internal dalam teks jawaban. Penerima pesan tidak perlu dan tidak boleh tahu asal usul jawaban. Jawab langsung secara alami.
-3. Jika pertanyaan mengenai alur kerja atau protokol, gunakan format urutan step-by-step berstruktur lengkap dengan kanal radio & layer terkait.
-4. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) penting jika relevan.
-5. Gunakan format tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan heading '#' atau format tabel markdown.
-6. JANGAN sertakan link URL luar. Berikan penjelasan mandiri yang tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
+3. LARANGAN DEKLARASI JABATAN ROBOTIK: JANGAN membuka jawaban dengan deklarasi jabatan robotik ("Sebagai Principal Wireless Protocol QA...", "Sebagai Core Engineer..."). Mulailah secara natural dan profesional (misal: "Halo rekan teknis!", "Mari kita bedah alurnya...", atau langsung masuk ke solusi teknis to-the-point).
+4. Jika pertanyaan menyangkut masalah/studi kasus pekerjaan, berikan struktur: Konsep/Penyebab Inti, Dampak Operasional/Lapangan, dan Checklist Langkah Triage (Actionable Checklist).
+5. Jika pertanyaan mengenai alur kerja atau protokol, gunakan format urutan step-by-step berstruktur lengkap dengan kanal radio & layer terkait.
+6. Sebutkan nama-nama kanal radio / interface / counter spesifik serta Information Element (IE) penting jika relevan.
+7. Gunakan format tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan heading '#' atau format tabel markdown.
+8. JANGAN sertakan link URL luar. Berikan penjelasan mandiri yang tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
   }
 
   // 6. Native Multi-Turn Payload Assembly
