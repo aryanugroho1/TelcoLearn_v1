@@ -379,8 +379,11 @@ export function getDailyTokenMetrics(targetDate = null) {
   const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
   const totalNotes = db.prepare('SELECT COUNT(*) as count FROM custom_user_notes').get().count;
   const totalKb = db.prepare('SELECT COUNT(*) as count FROM knowledge_base').get().count;
+  const totalFeedbacks = db.prepare('SELECT COUNT(*) as count FROM user_feedbacks').get()?.count || 0;
+  const pendingFeedbacks = db.prepare("SELECT COUNT(*) as count FROM user_feedbacks WHERE status = 'PENDING'").get()?.count || 0;
   const newUsersToday = db.prepare(`SELECT COUNT(*) as count FROM users WHERE DATE(created_at, 'localtime') = ${dateClause}`).get(...dateParam).count;
   const newNotesToday = db.prepare(`SELECT COUNT(*) as count FROM custom_user_notes WHERE DATE(created_at, 'localtime') = ${dateClause}`).get(...dateParam).count;
+  const newFeedbacksToday = db.prepare(`SELECT COUNT(*) as count FROM user_feedbacks WHERE DATE(created_at, 'localtime') = ${dateClause}`).get(...dateParam)?.count || 0;
 
   return {
     date: targetDate || new Date().toISOString().split('T')[0],
@@ -406,7 +409,10 @@ export function getDailyTokenMetrics(targetDate = null) {
       total_quizzes: totalQuizzes,
       new_notes_today: newNotesToday,
       total_notes: totalNotes,
-      total_kb: totalKb
+      total_kb: totalKb,
+      total_feedbacks: totalFeedbacks,
+      pending_feedbacks: pendingFeedbacks,
+      new_feedbacks_today: newFeedbacksToday
     }
   };
 }
@@ -485,3 +491,61 @@ export function getAllKnowledgeTopics() {
   const db = getDb();
   return db.prepare('SELECT id, topic_key, title, category, summary FROM knowledge_base ORDER BY id ASC').all();
 }
+
+/**
+ * ----------------------------------------------------
+ * USER FEEDBACK HELPERS (/masukan)
+ * ----------------------------------------------------
+ */
+
+export function saveUserFeedback({ userId, userJid, phoneNumber, feedbackText, category = 'general' }) {
+  const db = getDb();
+  let validUserId = null;
+  if (userId && Number(userId) > 0) {
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+    if (user) validUserId = user.id;
+  }
+
+  const stmt = db.prepare(`
+    INSERT INTO user_feedbacks (user_id, user_jid, phone_number, feedback_text, category, status)
+    VALUES (?, ?, ?, ?, ?, 'PENDING')
+  `);
+  const result = stmt.run(validUserId, userJid, phoneNumber || '', feedbackText.trim(), category);
+  return result.lastInsertRowid;
+}
+
+export function getAllFeedbacks({ limit = 10, offset = 0, status = null } = {}) {
+  const db = getDb();
+  let query = `
+    SELECT f.*, u.display_name 
+    FROM user_feedbacks f
+    LEFT JOIN users u ON f.user_id = u.id
+  `;
+  const params = [];
+  if (status) {
+    query += ' WHERE f.status = ?';
+    params.push(status);
+  }
+  query += ' ORDER BY f.created_at DESC LIMIT ? OFFSET ?';
+  params.push(Number(limit) || 10, Number(offset) || 0);
+  return db.prepare(query).all(...params);
+}
+
+export function getFeedbackMetrics() {
+  const db = getDb();
+  const total = db.prepare('SELECT COUNT(*) as count FROM user_feedbacks').get()?.count || 0;
+  const pending = db.prepare("SELECT COUNT(*) as count FROM user_feedbacks WHERE status = 'PENDING'").get()?.count || 0;
+  return { total, pending };
+}
+
+export function updateFeedbackStatus(feedbackId, status, adminNotes = null) {
+  const db = getDb();
+  const stmt = db.prepare(`
+    UPDATE user_feedbacks 
+    SET status = ?, admin_notes = COALESCE(?, admin_notes)
+    WHERE id = ?
+  `);
+  stmt.run(status, adminNotes, feedbackId);
+  return db.prepare('SELECT * FROM user_feedbacks WHERE id = ?').get(feedbackId);
+}
+

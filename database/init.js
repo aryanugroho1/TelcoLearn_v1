@@ -65,10 +65,33 @@ export function initializeDatabase() {
     console.warn('ℹ️ Migrasi kolom token tracking dilewati:', migErr.message);
   }
 
+  // 5. Pastikan tabel user_feedbacks ada
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS user_feedbacks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        user_jid TEXT NOT NULL,
+        phone_number TEXT,
+        feedback_text TEXT NOT NULL,
+        category TEXT DEFAULT 'general',
+        status TEXT DEFAULT 'PENDING',
+        admin_notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_feedbacks_user ON user_feedbacks(user_id);
+      CREATE INDEX IF NOT EXISTS idx_feedbacks_status ON user_feedbacks(status);
+    `);
+  } catch (fbErr) {
+    console.warn('ℹ️ Tabel user_feedbacks check:', fbErr.message);
+  }
+
   const moduleCount = db.prepare('SELECT COUNT(*) as count FROM modules').get().count;
   const quizCount = db.prepare('SELECT COUNT(*) as count FROM quizzes').get().count;
   const kbCount = db.prepare('SELECT COUNT(*) as count FROM knowledge_base').get().count;
-  console.log(`📊 Status Database: ${moduleCount} Modul Aktif, ${quizCount} Soal Kuis, ${kbCount} Topik ShareTechNote Siap Digunakan.`);
+  const fbCount = db.prepare('SELECT COUNT(*) as count FROM user_feedbacks').get()?.count || 0;
+  console.log(`📊 Status Database: ${moduleCount} Modul Aktif, ${quizCount} Soal Kuis, ${kbCount} Topik RAG, ${fbCount} Masukan Pengguna.`);
 }
 
 // If run directly

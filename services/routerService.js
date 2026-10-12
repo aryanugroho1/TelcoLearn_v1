@@ -19,6 +19,10 @@ import {
   saveUserNote,
   getUserNotes,
   getDailyTokenMetrics,
+  saveUserFeedback,
+  getAllFeedbacks,
+  getFeedbackMetrics,
+  updateFeedbackStatus,
   getDb
 } from '../database/db.js';
 import {
@@ -512,6 +516,29 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
       return;
     }
 
+    // 5.5. STATE: AWAITING USER FEEDBACK (/masukan)
+    if (currentState === 'AWAITING_USER_FEEDBACK') {
+      if (['/batal', '/cancel', 'batal', 'cancel', '0', '/menu', 'menu', 'kembali'].includes(lowerText)) {
+        updateUserState(user.jid, 'IDLE', null);
+        await reply({ text: `❌ *Pengiriman masukan dibatalkan.* Kembali ke menu utama:\n\n${MESSAGES.MAIN_MENU(user)}` });
+        return;
+      }
+
+      saveUserFeedback({
+        userId: user.id,
+        userJid: user.jid,
+        phoneNumber: user.phone_number,
+        feedbackText: rawText,
+        category: 'general'
+      });
+      updateUserState(user.jid, 'IDLE', null);
+
+      await reply({
+        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn:\n_"${rawText}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya. Tetap semangat belajar! 🚀${LOOPBACK_FOOTER}`
+      });
+      return;
+    }
+
     // 6. SLASH COMMANDS & SHORTCUTS (State IDLE)
     // 0 / Menu Utama
     if (lowerText === '/menu' || lowerText === 'menu' || lowerText === '0' || lowerText === 'kembali' || lowerText === 'home' || lowerText === 'main menu') {
@@ -669,6 +696,41 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
       return;
     }
 
+    // Shortcut 6 -> /masukan /feedback /saran
+    const isFeedbackCmd = (
+      lowerText === '/masukan' || lowerText.startsWith('/masukan ') ||
+      lowerText === '/feedback' || lowerText.startsWith('/feedback ') ||
+      lowerText === '/saran' || lowerText.startsWith('/saran ') ||
+      lowerText === '6'
+    );
+
+    if (isFeedbackCmd) {
+      const inlineFeedback = rawText
+        .replace(/^\/(masukan|feedback|saran)\s*/i, '')
+        .trim();
+
+      if (!inlineFeedback || lowerText === '6') {
+        updateUserState(user.jid, 'AWAITING_USER_FEEDBACK', null);
+        await reply({
+          text: `💡 *FORM MASUKAN & SARAN PENGEMBANGAN*\n\nPunya usulan topik 3GPP/5G/ML baru, ide fitur tambahan, atau menemukan kendala pada bot?\n\nSilakan *tuliskan pesan masukan Anda* sekarang dan kirimkan ke chat ini.\n\n_(Ketik *0* atau */batal* untuk membatalkan)_`
+        });
+        return;
+      }
+
+      saveUserFeedback({
+        userId: user.id,
+        userJid: user.jid,
+        phoneNumber: user.phone_number,
+        feedbackText: inlineFeedback,
+        category: 'general'
+      });
+
+      await reply({
+        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn:\n_"${inlineFeedback}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya! 🚀${LOOPBACK_FOOTER}`
+      });
+      return;
+    }
+
     // 6.4. SIMULASI & DIAGRAM VISUAL (/simulasi, /gambar, /visualisasi, atau permintaan teks natural)
     const isSimulationTrigger = (
       /^(\/(simulasi|gambar|visualisasi|diagram|grafik)\b|.*?\b(buat(kan)?|bikin|minta|tampilkan|perlihatkan|generate)\s*(gambar|simulasi|diagram|grafik|kurva|visualisasi)|.*?\b(gambarkan|simulasikan|visualisasikan)\b|.*?\b(ada|bisa)\s*(minta|buat(kan)?|lihat|tampilkan)?\s*(gambar|simulasi|diagram|grafik))/i.test(rawText)
@@ -706,7 +768,12 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
     }
 
     // 6.5. ADMIN TOKEN DASHBOARD & REPORT (Khusus Admin Pribadi / Self-Chat)
-    if (lowerText === '/admin' || lowerText.startsWith('/admin') || lowerText === '/stats' || lowerText === '/db' || lowerText === '/database') {
+    if (
+      lowerText === '/admin' || lowerText.startsWith('/admin') ||
+      lowerText === '/stats' || lowerText === '/db' || lowerText === '/database' ||
+      lowerText.startsWith('/masukan_list') || lowerText.startsWith('/list_masukan') ||
+      lowerText.startsWith('/feedback_list')
+    ) {
       const configuredAdmins = [
         process.env.ADMIN_PHONE_NUMBER,
         process.env.BOT_PHONE_NUMBER,
@@ -725,6 +792,40 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
 
       if (!isSenderAdmin) {
         await reply({ text: '⛔ Perintah ini khusus untuk Administrator TelcoLearn.' });
+        return;
+      }
+
+      // SUB-COMMAND: Admin Melihat Daftar Masukan Pengguna (/admin feedback, /admin masukan, /masukan_list)
+      if (
+        lowerText.includes('feedback') || lowerText.includes('masukan') ||
+        lowerText.startsWith('/masukan_list') || lowerText.startsWith('/list_masukan') ||
+        lowerText.startsWith('/feedback_list')
+      ) {
+        const limitMatch = rawText.match(/\b\d+\b/);
+        const limit = limitMatch ? parseInt(limitMatch[0], 10) : 10;
+        const feedbacks = getAllFeedbacks({ limit });
+        const fbMetrics = getFeedbackMetrics();
+
+        if (feedbacks.length === 0) {
+          await reply({
+            text: `📬 *DAFTAR MASUKAN PENGGUNA (FEEDBACK)*\n\nBelum ada masukan yang tercatat dari pengguna di database.\n\n_💡 Pengguna dapat mengirim saran melalui perintah */masukan [isi]*._\n\nKetik */admin* untuk kembali ke dashboard utama.`
+          });
+          return;
+        }
+
+        const fbListText = feedbacks.map((f, idx) => {
+          const dateStr = new Date(f.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+          const senderLabel = f.display_name
+            ? `${f.display_name} (${f.phone_number || f.user_jid.split('@')[0]})`
+            : (f.phone_number || f.user_jid.split('@')[0]);
+          const statusBadge = f.status === 'PENDING' ? '⏳ PENDING' : f.status === 'REVIEWED' ? '👀 REVIEWED' : '✅ SELESAI';
+          return `*${idx + 1}. [#${f.id}]* _${dateStr}_\n👤 *Pengirim:* ${senderLabel}\n📝 *Pesan:* "${f.feedback_text}"\n🏷️ *Status:* ${statusBadge}`;
+        }).join('\n\n');
+
+        const header = `📬 *DAFTAR MASUKAN PENGGUNA (FEEDBACK)*\nTotal: *${fbMetrics.total} Masukan* (⏳ *${fbMetrics.pending} Pending*)\nMenampilkan ${feedbacks.length} masukan terbaru:\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        const footer = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n💡 _Ketik */admin* untuk dashboard utama, atau */masukan_list 20* untuk melihat lebih banyak._`;
+
+        await reply({ text: header + fbListText + footer });
         return;
       }
 

@@ -221,12 +221,13 @@ Halo, *${user.display_name || 'Pelajar Telco'}*!
 🎯 Track: _${user.focus_track || 'protocol_qa'}_
 🔥 Streak: *${user.streak_count || 0} Hari*
 
-Pilih opsi di bawah _(cukup ketik angka 1 - 5 atau perintahnya)_:
+Pilih opsi di bawah _(cukup ketik angka 1 - 6 atau perintahnya)_:
 1️⃣ */belajar* - Baca materi micro-dose berikutnya
 2️⃣ */quiz* - Tantang kuis kognitif (tambah streak!)
 3️⃣ */streak* - Statistik & konsistensi belajar
 4️⃣ */profil* - Pengaturan track & jadwal reminder
 5️⃣ */bantuan* - Panduan penggunaan bot
+6️⃣ */masukan* - Kirim saran & ide pengembangan bot
 
 💡 *Tips Pro:*
 • Ketik */simulasi* untuk melihat grafik simulasi RF & diagram visual dari topik yang baru saja dibahas!
@@ -242,6 +243,7 @@ TelcoLearn adalah bot pendamping pembelajaran 3GPP & diagnosis protokol radio.
 • */belajar* - Mengirim materi micro-learning 3 menit
 • */quiz* - Membuka kuis pilihan ganda
 • */simulasi* - Membuat grafik simulasi RF / diagram visual kasus yang dibahas
+• */masukan [isi]* - Kirim saran / masukan untuk fitur baru & materi bot
 • */batal* - Membatalkan sesi kuis atau pencatatan
 • */streak* - Menampilkan rekor konsistensi belajar
 • */track [1/2/3]* - Mengganti jalur fokus materi (QA, Drive Test, ML)

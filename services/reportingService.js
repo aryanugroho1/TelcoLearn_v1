@@ -168,6 +168,7 @@ export function formatWhatsAppAdminReport(metrics) {
 • Total Soal Kuis di DB        : *${db.total_quizzes || 0} soal*
 • Total Catatan Teknis User    : *${db.total_notes || 0} catatan*
 • Ensiklopedia Knowledge Base   : *${db.total_kb || 0} topik*
+• Masukan Pengguna (/masukan)   : *${db.total_feedbacks || 0} feedback* (${db.pending_feedbacks || 0} pending)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 ${statusIcon} *Status Kuota AI Gemini:* ${metrics.verdict_message}
@@ -183,7 +184,8 @@ ${statusIcon} *Status Kuota AI Gemini:* ${metrics.verdict_message}
 👥 *Insinyur Aktif:* *${metrics.active_users} Orang* | ⏱️ Latensi: ${metrics.avg_latency_ms} ms
 
 💰 *Estimasi Biaya:* Rp ${Number(metrics.estimated_cost_idr).toLocaleString('id-ID')} ($${metrics.estimated_cost_usd})
-💡 *Rekomendasi:* ${metrics.verdict === 'STAY_FREE_TIER' ? 'Tetap gunakan Free Tier Google (Biaya Rp 0).' : 'Pertimbangkan aktivasi billing di GCP.'}`;
+💡 *Rekomendasi:* ${metrics.verdict === 'STAY_FREE_TIER' ? 'Tetap gunakan Free Tier Google (Biaya Rp 0).' : 'Pertimbangkan aktivasi billing di GCP.'}
+📬 _Ketik */admin feedback* atau */masukan_list* untuk membaca daftar masukan pengguna._`;
 }
 
 /**
