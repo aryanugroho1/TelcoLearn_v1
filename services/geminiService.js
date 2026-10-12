@@ -328,7 +328,10 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
   } else if (contextTrack === 'drive_test') {
     trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan dari sudut pandang *Field & Drive Test* (pengukuran RF di rute pengujian lapangan, analisis parameter RSRP/RSRQ/SINR/BLER di jalan, penggunaan tool lapangan seperti TEMS/Nemo/Scanner, physical cell issues, dan optimasi radio lapangan).`;
   } else if (contextTrack === 'protocol_qa') {
-    trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan dari sudut pandang *4G/5G Wireless Protocol QA & Lab Testing* (Layer 3 RRC/NAS, decoding trace modem QXDM/Shannon/PCAP, cause code 3GPP, timers radio, dan validasi standar 3GPP).`;
+    const isProtocolQuery = /\b(rrc|nas|call flow|handover|timer|t300|t310|rach|sdu|pdu|layer 3|l3|l2|mac|rlc|pdcp|qxdm|shannon)\b/i.test(lowerQ);
+    if (isProtocolQuery) {
+      trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nSajikan analisis mendalam pada aspek protokol radio 3GPP (signaling flow, Layer 2/Layer 3, cause code, dan timer).`;
+    }
   } else if (contextTrack === 'ml_telco') {
     trackContextInstruction = `\n\nPERSPEKTIF KHUSUS:\nFokuskan penjelasan dari sudut pandang *Machine Learning Telco Testing* (penerapan data science/AI, deteksi anomali time-series KPI radio, regresi prediktif performa UE/thermal, dan otomatisasi triage log).`;
   } else if (contextTrack === 'log_telco') {
@@ -364,9 +367,10 @@ INSTRUKSI KESINAMBUNGAN KASUS (STRICT CONTINUITY):
 1. JAWABLAH pertanyaan di atas SECARA SPESIFIK DALAM KERANGKA KASUS DI ATAS ("${lastTopic}").
 2. Jika pertanyaan membandingkan arsitektur atau protokol (misal: "apakah ini 5G SA atau NSA?"), jelaskan secara spesifik bagaimana kasus tersebut bermanifestasi pada masing-masing skenario (misal: pada 5G NSA karena keterbatasan 4G anchor leg / split bearer X2 buffer delay vs pada 5G SA karena cell loading, alokasi PRB, atau core network).
 3. DILARANG KERAS mengabaikan use case di atas dan hanya menjelaskan definisi teori umum yang lepas dari konteks kasus!
-4. LARANGAN DEKLARASI JABATAN ROBOTIK: JANGAN membuka jawaban dengan deklarasi jabatan robotik ("Sebagai Principal Wireless Protocol QA...", "Sebagai Core Engineer..."). Mulailah secara natural dan profesional.
-5. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan heading markdown '#' atau tabel markdown.
-6. KERAHASIAAN SUMBER: JANGAN menyebutkan kata "ShareTechNote", "database", atau sumber internal.${trackContextInstruction}${languageInstruction}`;
+4. LARANGAN DEKLARASI DIRI ATAU JABATAN: DILARANG KERAS membuka jawaban dengan deklarasi peran, jabatan, atau klaim profesi apa pun (seperti 'Sebagai praktisi...', 'Sebagai engineer...', 'Sebagai asisten...'). Mulailah secara natural dan profesional.
+5. ANTI-HALLUCINATION: Berpijaklah pada fakta standar 3GPP/vendor resmi, dilarang mengarang counter atau pesan sinyal fiktif.
+6. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan heading markdown '#' atau tabel markdown.
+7. KERAHASIAAN SUMBER: JANGAN menyebutkan kata "ShareTechNote", "database", atau sumber internal.${trackContextInstruction}${languageInstruction}`;
   } else if (kbMatch) {
     userTurnText = `Pertanyaan dari pelajar:
 "${question}"
@@ -377,11 +381,12 @@ ${kbMatch.core_content}
 Instruksi Menjawab:
 1. Jawab pertanyaan pelajar secara komprehensif, teknis, dan presisi mengacu pada konteks teknis di atas dan spesifikasi 3GPP terkini.
 2. KERAHASIAAN SUMBER: JANGAN PERNAH menyebutkan kata "ShareTechNote", "database", "knowledge base", "basis data", "RAG", "Gemini", atau sumber data internal dalam teks jawaban. Penerima pesan tidak perlu dan tidak boleh tahu asal usul jawaban. Jawab langsung secara alami tanpa kalimat klise seperti "Berdasarkan referensi/database...".
-3. LARANGAN DEKLARASI JABATAN ROBOTIK: JANGAN membuka jawaban dengan deklarasi jabatan robotik ("Sebagai Principal Wireless Protocol QA...", "Sebagai Core Engineer..."). Mulailah secara natural dan profesional.
-4. Jika pertanyaan menyangkut alur/proses (seperti call flow, signal acquisition, RAR, registration), WAJIB gunakan format urutan step-by-step yang rapi dan terstruktur (1️⃣, 2️⃣, 3️⃣ atau 1, 2, 3).
-5. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) / RNTI / Timer penting jika relevan.
-6. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan markdown heading '#' atau format tabel markdown.
-7. JANGAN menyertakan URL link luar. Berikan penjelasan mandiri yang lengkap, tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
+3. LARANGAN DEKLARASI DIRI ATAU JABATAN: DILARANG KERAS membuka jawaban dengan deklarasi peran, jabatan, atau klaim profesi apa pun (seperti 'Sebagai praktisi...', 'Sebagai engineer...', 'Sebagai asisten...'). Mulailah secara natural dan profesional.
+4. ANTI-HALLUCINATION: Jangan menambah informasi atau klaim yang bertentangan dengan konteks teknis di atas dan standar 3GPP.
+5. Jika pertanyaan menyangkut alur/proses (seperti call flow, signal acquisition, RAR, registration), WAJIB gunakan format urutan step-by-step yang rapi dan terstruktur (1️⃣, 2️⃣, 3️⃣ atau 1, 2, 3).
+6. Sebutkan nama-nama kanal radio spesifik (seperti PRACH, PDCCH, PDSCH, PBCH, PUSCH, PUCCH) serta Information Element (IE) / RNTI / Timer penting jika relevan.
+7. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan markdown heading '#' atau format tabel markdown.
+8. JANGAN menyertakan URL link luar. Berikan penjelasan mandiri yang lengkap, tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
   } else {
     userTurnText = `Pertanyaan dari pelajar:
 "${question}"
@@ -389,12 +394,13 @@ Instruksi Menjawab:
 Instruksi Menjawab:
 1. Jawablah secara profesional, mendalam, dan akurat berdasarkan spesifikasi 3GPP (Rel-15 s/d Rel-18), praktik vendor RAN (Nokia, Ericsson, Huawei, ZTE), Core Network, Cellular IoT, dan standar telekomunikasi terkini.
 2. KERAHASIAAN SUMBER: JANGAN PERNAH menyebutkan kata "ShareTechNote", "database", "knowledge base", "basis data", "RAG", "Gemini", atau sumber data internal dalam teks jawaban. Penerima pesan tidak perlu dan tidak boleh tahu asal usul jawaban. Jawab langsung secara alami.
-3. LARANGAN DEKLARASI JABATAN ROBOTIK: JANGAN membuka jawaban dengan deklarasi jabatan robotik ("Sebagai Principal Wireless Protocol QA...", "Sebagai Core Engineer..."). Mulailah secara natural dan profesional (misal: "Halo rekan teknis!", "Mari kita bedah alurnya...", atau langsung masuk ke solusi teknis to-the-point).
-4. Jika pertanyaan menyangkut masalah/studi kasus pekerjaan, berikan struktur: Konsep/Penyebab Inti, Dampak Operasional/Lapangan, dan Checklist Langkah Triage (Actionable Checklist).
-5. Jika pertanyaan mengenai alur kerja atau protokol, gunakan format urutan step-by-step berstruktur lengkap dengan kanal radio & layer terkait.
-6. Sebutkan nama-nama kanal radio / interface / counter spesifik serta Information Element (IE) penting jika relevan.
-7. Gunakan format tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan heading '#' atau format tabel markdown.
-8. JANGAN sertakan link URL luar. Berikan penjelasan mandiri yang tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
+3. LARANGAN DEKLARASI DIRI ATAU JABATAN: DILARANG KERAS membuka jawaban dengan deklarasi peran, jabatan, atau klaim profesi apa pun (seperti 'Sebagai praktisi...', 'Sebagai engineer...', 'Sebagai asisten...'). Mulailah secara natural dan profesional (misal: "Halo rekan teknis!", "Mari kita bedah alurnya...", atau langsung masuk ke solusi teknis to-the-point).
+4. ANTI-HALLUCINATION: Seluruh penjelasan wajib berbasis standar resmi 3GPP/vendor. DILARANG mengarang counter, parameter, atau pesan fiktif. Jika formulasi berbeda antar release vendor, jelaskan secara objektif ketergantungannya pada software release.
+5. Jika pertanyaan menyangkut masalah/studi kasus pekerjaan, berikan struktur: Konsep/Penyebab Inti, Dampak Operasional/Lapangan, dan Checklist Langkah Triage (Actionable Checklist).
+6. Jika pertanyaan mengenai alur kerja atau protokol, gunakan format urutan step-by-step berstruktur lengkap dengan kanal radio & layer terkait.
+7. Sebutkan nama-nama kanal radio / interface / counter spesifik serta Information Element (IE) penting jika relevan.
+8. Gunakan format tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). JANGAN gunakan heading '#' atau format tabel markdown.
+9. JANGAN sertakan link URL luar. Berikan penjelasan mandiri yang tuntas sampai kalimat penutup, dan tidak terpotong (panjang ideal: 1.500 - 3.500 karakter).${trackContextInstruction}${languageInstruction}`;
   }
 
   // 6. Native Multi-Turn Payload Assembly
