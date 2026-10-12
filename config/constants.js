@@ -11,11 +11,12 @@ Anda memiliki keahlian multi-disiplin dan secara cerdas menyesuaikan sudut panda
 1. Core Network & IMS Lens: Saat pertanyaan membahas 5G Core (AMF, SMF, UPF, PCF, NRF, SBA), 4G EPC (MME, SGW, PGW), IMS, VoLTE/VoNR, SIP, N4/N2/N3/S1 interfaces, dan QoS flow (5QI/QCI). Tinjau dari arsitektur control/user plane dan routing interkoneksi.
 2. RAN Performance & Optimization (RPO) Lens: Saat pertanyaan membahas formula KPI OSS (Accessibility, Retainability, Mobility, Integrity/Packet Loss/Drop Rate/Throughput), counter vendor (Nokia NetAct, Ericsson ENM, Huawei U2020/MAE, ZTE), utilisasi PRB, antenna tilt/azimuth, dan parameter tuning radio seluler.
 3. RAN Integration & Commissioning Lens: Saat pertanyaan membahas integrasi site baru, hardware BBU/RRU/AAU, cabling optik SFP, RET, alarm VSWR/link down, commissioning antarmuka S1/X2/NG/Xn, dan verifikasi site down.
-4. Customer Experience Management (CEM) & SOC Lens: Saat pertanyaan membahas end-to-end QoE, video streaming stall ratio, latency gaming, VoLTE MOS score, komplain VIP customer, dan korelasi performa jaringan terhadap persepsi pengguna.
-5. Wireless Protocol QA & Lab Testing Lens: Saat pertanyaan membahas Layer 3 RRC/NAS, decoding log modem QXDM/Shannon/PCAP, cause code 3GPP, dan timer radio.
-6. Senior Technical Mentor / Work Colleague Lens: Saat pengguna (baik pemula maupun engineer berpengalaman) menanyakan studi kasus kerja lapangan nyata ('ada issue di site...', 'sedang troubleshoot...', 'bagaimana langkah mengatasinya...'), berikan jawaban to-the-point dengan 'Actionable Troubleshooting Checklist' yang terstruktur tanpa menggurui secara textbook.
-7. Cellular IoT & Nirkabel: NB-IoT, LTE-M (eMTC/Cat-M1), 5G RedCap, Wi-Fi, Satelit/NTN, transmisi data sensor, Coverage Enhancement (CE Level), dan efisiensi daya PSM/eDRX.
-8. Machine Learning untuk Device Testing & Anomali KPI (LSTM, Isolation Forest, XGBoost, modem crash triage).
+4. O-RAN & Cloud-Native Systems Lens: Saat pertanyaan membahas O-RAN Alliance architecture, Near-RT RIC & Non-RT RIC, pembuatan xApps & rApps (Python/C++/Go/ricxappframe), antarmuka E2 (E2AP/E2SM-KPM/RC), A1, O1 (NETCONF/YANG), O-Cloud, kontainerisasi Docker, orkestrasi Kubernetes/CNF, Helm charts, dan troubleshooting Linux untuk RAN telco.
+5. Customer Experience Management (CEM) & SOC Lens: Saat pertanyaan membahas end-to-end QoE, video streaming stall ratio, latency gaming, VoLTE MOS score, komplain VIP customer, dan korelasi performa jaringan terhadap persepsi pengguna.
+6. Wireless Protocol QA & Lab Testing Lens: Saat pertanyaan membahas Layer 3 RRC/NAS, decoding log modem QXDM/Shannon/PCAP, cause code 3GPP, dan timer radio.
+7. Senior Technical Mentor / Work Colleague Lens: Saat pengguna (baik pemula maupun engineer berpengalaman) menanyakan studi kasus kerja lapangan nyata ('ada issue di site...', 'sedang troubleshoot...', 'bagaimana langkah mengatasinya...'), berikan jawaban to-the-point dengan 'Actionable Troubleshooting Checklist' yang terstruktur tanpa menggurui secara textbook.
+8. Cellular IoT & Nirkabel: NB-IoT, LTE-M (eMTC/Cat-M1), 5G RedCap, Wi-Fi, Satelit/NTN, transmisi data sensor, Coverage Enhancement (CE Level), dan efisiensi daya PSM/eDRX.
+9. Machine Learning untuk Device Testing & Anomali KPI (LSTM, Isolation Forest, XGBoost, modem crash triage).
 
 Pedoman Format Keluaran WhatsApp:
 - Output WAJIB menggunakan sintaks teks WhatsApp murni:
@@ -119,7 +120,7 @@ export function isObviousNonTelcoQuery(text) {
   const clean = text.toLowerCase().trim();
 
   // Jika mengandung indikator telco/jaringan, jangan diblokir oleh pre-filter
-  const telcoIndicators = /\b(telco|telecom|telekomunikasi|jaringan|network|networking|signal|sinyal|radio|rf|4g|5g|3g|2g|lte|nr|gsm|umts|ran|o-ran|core|enb|gnb|ue|modem|sim|esim|plmn|imsi|imei|ip|tcp|udp|dns|dhcp|vlan|vpn|router|routing|switch|ping|latency|bandwidth|throughput|jitter|packet|loss|pcap|wireshark|rach|rrc|nas|mac|phy|pdcp|rlc|sdap|rsrp|rsrq|sinr|bler|cqi|mcs|pci|earfcn|ssb|mimo|beamforming|antenna|tilt|azimuth|drivetest|drive test|tems|nemo|qxdm|shannon|volte|vonr|ims|sip|sdp|satellite|ntn|haps|hasp|capex|opex|tco|spectrum|spektrum|wifi|bluetooth|fiber|dwdm|itu|3gpp|etsi|iot|nb-iot|cat-m|redcap|nokia|ericsson|huawei|zte|samsung|kpi|counter|oss|netact|enm)\b/i;
+  const telcoIndicators = /\b(telco|telecom|telekomunikasi|jaringan|network|networking|signal|sinyal|radio|rf|4g|5g|3g|2g|lte|nr|gsm|umts|ran|o-ran|core|enb|gnb|ue|modem|sim|esim|plmn|imsi|imei|ip|tcp|udp|dns|dhcp|vlan|vpn|router|routing|switch|ping|latency|bandwidth|throughput|jitter|packet|loss|pcap|wireshark|rach|rrc|nas|mac|phy|pdcp|rlc|sdap|rsrp|rsrq|sinr|bler|cqi|mcs|pci|earfcn|ssb|mimo|beamforming|antenna|tilt|azimuth|drivetest|drive test|tems|nemo|qxdm|shannon|volte|vonr|ims|sip|sdp|satellite|ntn|haps|hasp|capex|opex|tco|spectrum|spektrum|wifi|bluetooth|fiber|dwdm|itu|3gpp|etsi|iot|nb-iot|cat-m|redcap|nokia|ericsson|huawei|zte|samsung|kpi|counter|oss|netact|enm|docker|kubernetes|k8s|helm|container|xapp|xapps|rapp|rapps|ric|e2sm|e2ap|a1|o1|o-cloud|linux|cnf|vran|ricxappframe)\b/i;
   if (telcoIndicators.test(clean)) return false;
 
   // Pola topik non-telco yang sangat jelas (Bilingual ID & EN)

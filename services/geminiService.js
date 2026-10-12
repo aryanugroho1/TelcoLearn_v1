@@ -308,6 +308,7 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
   // 3. Dynamic Chameleon Perspective & Domain Detection
   const lowerQ = question.toLowerCase();
   const isCoreDomain = /\b(5gc|amf|smf|upf|pcf|udm|ausf|nrf|nssf|nef|sba|epc|mme|sgw|pgw|hss|ims|sip|sdp|volte|vonr|n2|n3|n4|s1-mme|s1-u|diameter|pdu session|qos flow|5qi|qci)\b/i.test(lowerQ);
+  const isOranDomain = /\b(o-ran|oran|open ran|ric|near-rt|non-rt|xapp|xapps|rapp|rapps|e2|e2sm|e2ap|a1|o1|o-du|o-cu|o-ru|7\.2x|o-cloud|docker|container|kubernetes|k8s|helm|cnf|vran|ricxappframe)\b/i.test(lowerQ);
   const isRanOptDomain = /\b(kpi|counter|oss|netact|enm|u2020|mae|prb|retainability|accessibility|drop rate|packet loss|throughput|handover success|hosr|sinr|cqi|bler|tilt|azimuth|cluster|neighbor|pci conflict|congestion)\b/i.test(lowerQ);
   const isIntegrationDomain = /\b(commissioning|integrasi|site down|cell down|bbu|rru|aau|vswr|ret|sfp|cabling|fiber optic|cpri|ecpri|s1 link|x2 link|ng link|xn link|board alarm|hardware alarm)\b/i.test(lowerQ);
   const isCemDomain = /\b(cem|soc|qoe|customer experience|user experience|video stall|buffering|latency game|gaming latency|mos score|vip complaint|komplain pelanggan|pelanggan komplain)\b/i.test(lowerQ);
@@ -316,6 +317,8 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
   let trackContextInstruction = '';
   if (isCoreDomain) {
     trackContextInstruction = `\n\nPERSPEKTIF DOMAIN UTAMA:\nTinjau kasus/pertanyaan ini dari sudut pandang *Core Network Specialist & Signaling Architect* (analisis alur Control/User Plane, interkoneksi antarmuka N2/N3/N4/S1, session management, dan routing IMS/5GC).`;
+  } else if (isOranDomain) {
+    trackContextInstruction = `\n\nPERSPEKTIF DOMAIN UTAMA:\nTinjau kasus/pertanyaan ini dari sudut pandang *O-RAN Systems & Cloud-Native Software Engineer* (arsitektur O-RAN Alliance, Near-RT/Non-RT RIC, xApps/rApps lifecycle, integrasi antarmuka E2/A1/O1, kontainerisasi Docker/Kubernetes/O-Cloud, Helm charts, dan scripting Linux/Python/C++ untuk network intelligence).`;
   } else if (isRanOptDomain) {
     trackContextInstruction = `\n\nPERSPEKTIF DOMAIN UTAMA:\nTinjau kasus/pertanyaan ini dari sudut pandang *RAN Performance & Optimization (RPO) Lead* (analisis formula KPI OSS, utilisasi PRB, cluster tuning, parameter radio, dan counter vendor Nokia NetAct/Ericsson ENM/Huawei).`;
   } else if (isIntegrationDomain) {
