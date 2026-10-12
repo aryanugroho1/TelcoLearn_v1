@@ -275,8 +275,8 @@ async function startBot() {
         console.warn('ℹ️ Gagal memeriksa Reachout Timelock:', e.message);
       }
 
-      // Aktifkan scheduler pengiriman materi harian
-      initScheduler(sock);
+      // Aktifkan scheduler pengiriman materi harian dengan dynamic socket getter
+      initScheduler(() => sockInstance);
     }
   });
 

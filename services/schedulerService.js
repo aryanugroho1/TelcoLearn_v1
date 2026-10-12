@@ -12,15 +12,33 @@ import { sendSafeScheduled } from './antiBanService.js';
 import { sendDailyEmailReport } from './reportingService.js';
 
 let activeCronJobs = [];
+let currentSocketGetter = null;
 
 /**
  * Dispatch materi terjadwal untuk slot tertentu dengan proteksi anti-bulk spam
  */
-export async function dispatchScheduledSlot(sock, slotName) {
+export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
+  let sock;
+  let slotName;
+
+  if (typeof sockOrSlot === 'string') {
+    slotName = sockOrSlot;
+    sock = typeof currentSocketGetter === 'function' ? currentSocketGetter() : currentSocketGetter;
+  } else {
+    sock = sockOrSlot || (typeof currentSocketGetter === 'function' ? currentSocketGetter() : currentSocketGetter);
+    slotName = maybeSlotName || 'morning';
+  }
+
   console.log(`⏰ [Scheduler] Memulai dispatch materi otomatis untuk slot: ${slotName.toUpperCase()}`);
 
   if (!sock) {
     console.warn('⚠️ [Scheduler] Baileys socket belum siap, lewati dispatch.');
+    return;
+  }
+
+  // Cek kesiapan WebSocket (readyState 1 = OPEN) jika property ws tersedia
+  if (sock.ws && typeof sock.ws.readyState === 'number' && sock.ws.readyState !== 1) {
+    console.warn(`⚠️ [Scheduler] WebSocket Baileys sedang tidak aktif (readyState: ${sock.ws.readyState}). Melewati dispatch slot ${slotName}.`);
     return;
   }
 
@@ -53,6 +71,16 @@ export async function dispatchScheduledSlot(sock, slotName) {
         }
       } catch (userErr) {
         console.error(`❌ [Scheduler] Gagal mengirim pesan ke user ${user.jid}:`, userErr.message);
+
+        // Jika error Connection Closed, periksa apakah koneksi socket terputus
+        const activeSock = typeof currentSocketGetter === 'function' ? currentSocketGetter() : currentSocketGetter;
+        const isClosed = userErr.message?.toLowerCase().includes('connection closed') ||
+                         (activeSock?.ws && typeof activeSock.ws.readyState === 'number' && activeSock.ws.readyState !== 1);
+
+        if (isClosed) {
+          console.warn(`⚠️ [Scheduler] Terdeteksi koneksi WhatsApp terputus di tengah pengiriman batch. Menunda sisa antrean slot ${slotName} demi keamanan akun.`);
+          break;
+        }
       }
     }
   } catch (err) {
@@ -63,7 +91,13 @@ export async function dispatchScheduledSlot(sock, slotName) {
 /**
  * Inisialisasi cron jobs
  */
-export function initScheduler(sock) {
+export function initScheduler(sockOrGetter) {
+  if (typeof sockOrGetter === 'function') {
+    currentSocketGetter = sockOrGetter;
+  } else {
+    currentSocketGetter = () => sockOrGetter;
+  }
+
   // Hentikan cron job sebelumnya jika ada
   activeCronJobs.forEach(job => job.stop());
   activeCronJobs = [];
@@ -72,19 +106,19 @@ export function initScheduler(sock) {
 
   // 1. Slot Pagi (07:30 WIB)
   const morningJob = cron.schedule('30 7 * * *', () => {
-    dispatchScheduledSlot(sock, 'morning');
+    dispatchScheduledSlot('morning');
   }, { timezone });
   activeCronJobs.push(morningJob);
 
   // 2. Slot Siang (12:30 WIB)
   const afternoonJob = cron.schedule('30 12 * * *', () => {
-    dispatchScheduledSlot(sock, 'afternoon');
+    dispatchScheduledSlot('afternoon');
   }, { timezone });
   activeCronJobs.push(afternoonJob);
 
   // 3. Slot Malam (20:30 WIB)
   const nightJob = cron.schedule('30 20 * * *', () => {
-    dispatchScheduledSlot(sock, 'night');
+    dispatchScheduledSlot('night');
   }, { timezone });
   activeCronJobs.push(nightJob);
 

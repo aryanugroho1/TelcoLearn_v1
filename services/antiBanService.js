@@ -39,6 +39,18 @@ export function getStoredMessage(id) {
 }
 
 /**
+ * Anti-Loop Outbound Tracker
+ * Melacak ID pesan yang dikirim oleh bot agar tidak diproses kembali sebagai pesan masuk (anti feedback-loop)
+ */
+export const sentMessageIds = new Set();
+
+export function recordSentMessageId(id) {
+  if (!id) return;
+  sentMessageIds.add(id);
+  setTimeout(() => sentMessageIds.delete(id), 180000); // Evict setelah 3 menit
+}
+
+/**
  * ----------------------------------------------------
  * 1. CIRCUIT BREAKER & COOLDOWN LOCK
  * ----------------------------------------------------
@@ -313,6 +325,7 @@ class OutboundQueue {
         // Simpan pesan keluar ke memory store untuk menjawab retry request server WA
         if (result?.key?.id) {
           saveMessageToStore(result.key.id, result);
+          recordSentMessageId(result.key.id);
         }
 
         this.lastSentTimestamp = Date.now();

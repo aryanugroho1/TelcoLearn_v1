@@ -31,14 +31,14 @@ import {
 } from '../config/constants.js';
 import { analyzeTelcoLog, answerGeneralTelcoQuestion, analyzeTelcoImage, analyzeTelcoDocument } from './geminiService.js';
 import { generateTelcoSimulation } from './simulationService.js';
-import { sendSafeReply } from './antiBanService.js';
+import { sendSafeReply, sentMessageIds, recordSentMessageId } from './antiBanService.js';
 import { formatWhatsAppAdminReport, sendDailyEmailReport } from './reportingService.js';
 
 // Cache dua arah LID <-> Phone (diadopsi dari ai-reception-zeroweb)
 export const lidMap = new Map();
 
-// Set untuk melacak ID pesan yang dikirim oleh bot agar tidak merespons balasan sendiri (anti-loop)
-export const sentMessageIds = new Set();
+// Re-export untuk backward compatibility
+export { sentMessageIds, recordSentMessageId };
 
 export const LOOPBACK_FOOTER = '\n\n────────────────────────\n☕ Dukung kami: https://saweria.co/TelcoLearn\n💡 _Ketik */simulasi* untuk melihat grafik/diagram topik ini, atau *0* untuk menu utama._';
 
@@ -154,9 +154,7 @@ export async function sendReply(sock, jid, content) {
   console.log(`📤 [Outbound Send] Mengirim balasan ke ${jid}...`);
   const sent = await sock.sendMessage(jid, content);
   if (sent?.key?.id) {
-    sentMessageIds.add(sent.key.id);
-    // Evict after 3 minutes to keep memory footprint bounded (persis ai-reception-zeroweb)
-    setTimeout(() => sentMessageIds.delete(sent.key.id), 180000);
+    recordSentMessageId(sent.key.id);
   }
   return sent;
 }
@@ -208,11 +206,19 @@ export async function handleIncomingMessage(sock, msg) {
     const myLid = myLidRaw ? `${myLidRaw}@lid` : null;
 
     // Deteksi obrolan dengan diri sendiri (Message Yourself)
-    const isSelfChat = Boolean(
-      msg.key?.fromMe ||
+    const isTargetingSelf = Boolean(
       (myLid && (senderJid === myLid || (cleanSenderLid && cleanSenderLid === myLidRaw))) ||
       (myPn && (senderJid === myPn || (cleanSenderPhone && cleanSenderPhone === myPnRaw)))
     );
+
+    // KRUSIAL ANTI-LOOP: Jika msg.key.fromMe = true TETAPI BUKAN obrolan ke bot sendiri,
+    // maka ini adalah pesan keluar yang dikirim ke kontak/user lain (misal materi scheduler atau balasan bot).
+    // JANGAN PERNAH diproses sebagai pesan masuk agar tidak terjadi feedback loop/burst overload!
+    if (msg.key?.fromMe && !isTargetingSelf) {
+      return;
+    }
+
+    const isSelfChat = isTargetingSelf;
 
     // Tentukan JID balasan:
     // Jika self-chat, kirim ke nomor HP (@s.whatsapp.net).
