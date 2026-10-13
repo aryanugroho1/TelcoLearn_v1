@@ -150,10 +150,13 @@ export function generateHtmlReport(metrics, weeklyTrend) {
 /**
  * Format teks ringkas untuk respon admin via WhatsApp
  */
-export function formatWhatsAppAdminReport(metrics) {
+export function formatWhatsAppAdminReport(metrics, cacheStats = null) {
   const isHealthy = metrics.total_requests < 1200;
   const statusIcon = isHealthy ? '🟢' : '🔴';
   const db = metrics.db_stats || {};
+  const cacheLine = cacheStats 
+    ? `• Cache Response Dinamis     : *${cacheStats.totalEntries} tersimpan (${cacheStats.totalHits} hit / hemat ${Number(cacheStats.savedTokens).toLocaleString()} token)*\n  ↳ _Driver: ${cacheStats.driver}_\n`
+    : '';
   
   return `📊 *TELCOLEARN ADMIN & DATABASE DASHBOARD*
 📅 *Tanggal:* ${metrics.date}
@@ -168,7 +171,7 @@ export function formatWhatsAppAdminReport(metrics) {
 • Total Soal Kuis di DB        : *${db.total_quizzes || 0} soal*
 • Total Catatan Teknis User    : *${db.total_notes || 0} catatan*
 • Ensiklopedia Knowledge Base   : *${db.total_kb || 0} topik*
-• Masukan Pengguna (/masukan)   : *${db.total_feedbacks || 0} feedback* (${db.pending_feedbacks || 0} pending)
+${cacheLine}• Masukan Pengguna (/masukan)   : *${db.total_feedbacks || 0} feedback* (${db.pending_feedbacks || 0} pending)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 ${statusIcon} *Status Kuota AI Gemini:* ${metrics.verdict_message}

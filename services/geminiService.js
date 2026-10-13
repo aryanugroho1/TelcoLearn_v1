@@ -7,6 +7,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { GEMINI_SYSTEM_INSTRUCTION, MESSAGES } from '../config/constants.js';
 import { logLlmConversation, searchKnowledgeBase, getRecentLlmConversation } from '../database/db.js';
+import { getCachedResponse, setCachedResponse } from './cacheService.js';
 
 let genAIClient = null;
 
@@ -48,7 +49,8 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
         'gemini-3.1-flash-lite',
         'gemini-3.5-flash-lite'
       ]));
-  const timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS || '35000', 10);
+  const timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS || '45000', 10);
+  const perAttemptTimeoutMs = parseInt(process.env.GEMINI_PER_ATTEMPT_TIMEOUT_MS || '14000', 10);
 
   let timer = null;
   const timeoutPromise = new Promise((_, reject) => {
@@ -62,7 +64,14 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
 
     for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
       const currentModel = candidateModels[attempt - 1] || candidateModels[0];
-      try {
+      
+      // Watchdog Per-Attempt: Jangan biarkan 1 model menggantung seluruh 45s
+      let attemptTimer = null;
+      const attemptTimeoutPromise = new Promise((_, reject) => {
+        attemptTimer = setTimeout(() => reject(new Error(`ATTEMPT_TIMEOUT_${currentModel}`)), perAttemptTimeoutMs);
+      });
+
+      const singleAttemptExecution = async () => {
         // 1. Coba pola SDK @google/genai v0.1.x / v1.x (models.generateContent)
         if (client.models && typeof client.models.generateContent === 'function') {
           const genConfig = {
@@ -70,10 +79,11 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
             temperature: 0.2,
             maxOutputTokens: 2048
           };
-          // Extended thinking hanya diaktifkan jika analisis log mendalam
-          if (options.isLogAnalysis) {
+          // Extended thinking hanya diaktifkan jika konfigurasi GEMINI_THINKING_BUDGET > 0
+          const thinkingBudget = parseInt(process.env.GEMINI_THINKING_BUDGET || '0', 10);
+          if (options.isLogAnalysis && thinkingBudget > 0) {
             genConfig.thinkingConfig = {
-              thinkingBudget: 1024
+              thinkingBudget
             };
           }
           const contents = options.imagePart
@@ -150,11 +160,20 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
         }
 
         throw new Error('Unsupported @google/genai client structure');
+      };
+
+      try {
+        const attemptResult = await Promise.race([singleAttemptExecution(), attemptTimeoutPromise]);
+        if (attemptTimer) clearTimeout(attemptTimer);
+        return attemptResult;
       } catch (err) {
+        if (attemptTimer) clearTimeout(attemptTimer);
         lastError = err;
+        const isAttemptTimeout = err.message && err.message.startsWith('ATTEMPT_TIMEOUT_');
         const statusCode = err.status || err.statusCode || (err.error && err.error.code);
         const errMsg = String(err.message || '');
-        const isTransient = statusCode === 503 || 
+        const isTransient = isAttemptTimeout ||
+                            statusCode === 503 || 
                             statusCode === 429 || 
                             statusCode === 408 || 
                             (statusCode >= 500 && statusCode < 600) ||
@@ -164,9 +183,8 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
                             errMsg.includes('RESOURCE_EXHAUSTED');
 
         if (isTransient && attempt <= MAX_RETRIES) {
-          const delayMs = 300 + Math.floor(Math.random() * 200);
-          console.warn(`⚠️ [Gemini Transient ${statusCode || '503'}] Server Google antre/padat. Mengalihkan instan ke model cadangan dalam ${delayMs}ms (Percobaan ${attempt}/${MAX_RETRIES})...`);
-          await new Promise(r => setTimeout(r, delayMs));
+          const nextModel = candidateModels[attempt] || candidateModels[0];
+          console.warn(`⚠️ [Gemini Rapid Fallback] Model '${currentModel}' ${isAttemptTimeout ? `tidak merespons dalam ${perAttemptTimeoutMs}ms` : `mengalami antrean/transient error (${statusCode || errMsg})`}. Mengalihkan instan ke model cadangan '${nextModel}' (Percobaan ${attempt}/${MAX_RETRIES})...`);
           continue;
         }
 
@@ -294,6 +312,29 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
   const lastInteraction = recentHistory[recentHistory.length - 1];
   const lastTopic = lastInteraction?.incoming_query || '';
 
+  // 1.5 DYNAMIC RESPONSE CACHE (PostgreSQL Coolify / SQLite)
+  // Cek cache untuk pertanyaan mandiri non-followup
+  if (!isConversationalFollowUp) {
+    try {
+      const cached = await getCachedResponse(question);
+      if (cached) {
+        const latency = Date.now() - startTime;
+        console.log(`⚡ [Cache Hit] '${question.slice(0, 45)}...' ditemukan di cache (${cached.driver}). Menjawab seketika.`);
+        try {
+          logLlmConversation(userId, question, cached.text, latency, cached.usage);
+        } catch (dbErr) {}
+
+        const showTokenStats = process.env.SHOW_TOKEN_STATS === 'true';
+        const tokenStats = showTokenStats 
+          ? `\n\n⚡ _Respon Instan (Cache ${cached.driver}) | 0 Token | ⏱️ ${(latency / 1000).toFixed(2)}s_` 
+          : '';
+        return `${cached.text}${tokenStats}`;
+      }
+    } catch (cacheErr) {
+      console.warn('⚠️ [Cache Lookup Warning]:', cacheErr.message);
+    }
+  }
+
   // 2. Smart RAG Gating:
   // JANGAN jalankan pencarian RAG artikel umum jika ini adalah follow-up lanjutan dari use-case aktif!
   // Mencegah over-eager RAG (misal "apakah ini SA atau NSA" memicu artikel 3000 token registrasi 5G SA yang merusak konteks throughput).
@@ -417,6 +458,13 @@ Instruksi Menjawab:
     logLlmConversation(userId, question, result.text, latency, result.usage || {});
   } catch (dbErr) {
     console.error('Failed to log LLM interaction to SQLite:', dbErr);
+  }
+
+  // Simpan ke Cache jika respon berhasil dan bukan follow-up
+  if (result.success && !isConversationalFollowUp && result.text && result.text.length > 50) {
+    setCachedResponse(question, result.text, result.usage || {}).catch(err => {
+      console.warn('⚠️ [Cache Save Warning]:', err.message);
+    });
   }
 
   const latencySec = (latency / 1000).toFixed(1);

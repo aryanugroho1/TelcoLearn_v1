@@ -42,6 +42,7 @@ import { analyzeTelcoLog, answerGeneralTelcoQuestion, analyzeTelcoImage, analyze
 import { generateTelcoSimulation } from './simulationService.js';
 import { sendSafeReply, sentMessageIds, recordSentMessageId } from './antiBanService.js';
 import { formatWhatsAppAdminReport, sendDailyEmailReport } from './reportingService.js';
+import { getCacheMetrics } from './cacheService.js';
 
 // Cache dua arah LID <-> Phone (diadopsi dari ai-reception-zeroweb)
 export const lidMap = new Map();
@@ -826,7 +827,8 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
       }
 
       const metrics = getDailyTokenMetrics();
-      const reportText = formatWhatsAppAdminReport(metrics);
+      const cacheStats = await getCacheMetrics();
+      const reportText = formatWhatsAppAdminReport(metrics, cacheStats);
 
       if (lowerText.includes('email') || lowerText.includes('report') || lowerText.includes('kirim')) {
         await reply({ text: `${reportText}\n\n⏳ Mengirim salinan dashboard HTML ke email *arya.nugroho.works1@gmail.com*...` });
