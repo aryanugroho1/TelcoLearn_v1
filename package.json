@@ -10,7 +10,8 @@
     "test": "node test-engine.js",
     "test-gemini": "node test-gemini.js",
     "dashboard": "node scripts/dashboard.js",
-    "ingest": "node scripts/ingest_knowledge.js"
+    "ingest": "node scripts/ingest_knowledge.js",
+    "mirror-standards": "node --max-old-space-size=4096 scripts/mirror_standards.js"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",
