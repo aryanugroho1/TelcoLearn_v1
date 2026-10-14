@@ -113,17 +113,19 @@ Perintah pemantauan PM2:
 ## 📱 Perintah Interaktif WhatsApp
 
 - `/menu` : Menu navigasi utama.
-- `/belajar` : Mengambil materi micro-learning berikutnya.
+- `/belajar` (atau `/learn`) : Mengambil materi micro-learning berikutnya.
 - `/quiz` : Menjawab kuis kognitif 60 detik & menambah streak.
+- `/simulasi` (atau `/sim`) : Menghasilkan grafik simulasi RF & diagram visual topik aktif.
+- `/lang [en/id]` : Mengganti bahasa bot (English / Bahasa Indonesia).
 - `/batal` : Membatalkan sesi kuis atau pencatatan yang sedang aktif.
 - `/streak` : Melihat rekor hari belajar berturut-turut & pencapaian.
-- `/track [1/2/3]` : Mengubah fokus materi (Protocol QA, Drive Test, ML Telco).
+- `/track [1/2/3/4]` : Mengubah fokus materi (4G/5G QA, Drive Test, ML Telco, Log Analysis).
 - `/jadwal [1/2/3]` : Mengubah waktu pengingat materi harian.
 - `/catat [isi]` : Menyimpan catatan teknis ke database lokal.
 - `/notes` : Melihat daftar catatan pribadi yang tersimpan.
-- `/profil` : Menampilkan jalur fokus & preferensi waktu belajar.
+- `/profil` : Menampilkan jalur fokus, bahasa, & preferensi waktu belajar.
 - `/reset` : Mengatur ulang profil belajar dari awal.
-- `/bantuan` : Petunjuk lengkap penggunaan bot.
+- `/bantuan` (atau `/help`) : Petunjuk lengkap penggunaan bot.
 
 **Diagnostik AI Otomatis:**
 Pengguna dapat langsung mengirimkan potongan error log seperti:
@@ -132,3 +134,18 @@ RRCConnectionReject waitTime: 16
 5GMM cause = 11 (PLMN not allowed)
 ```
 Bot akan otomatis mendeteksi pola log radio dan menyajikan **Root Cause Analysis (RCA)**, **Dampak pada Modem UE**, serta **Langkah Pengujian di Laboratorium** via Gemini 3 Flash.
+
+---
+
+## 📄 Publikasi Ilmiah & Technical Whitepaper
+
+Dokumentasi arsitektur komprehensif berstandar jurnal ilmiah (IEEE/ACM format) tersedia pada:
+👉 **[docs/TELCOLEARN_SCIENTIFIC_WHITEPAPER.md](docs/TELCOLEARN_SCIENTIFIC_WHITEPAPER.md)**
+
+**Topik Riset yang Dibahas:**
+1. **Dual-Tier Hybrid RAG**: Harmonisasi standar resmi 3GPP (22 spesifikasi Rel-15 s/d Rel-18) dengan ensiklopedia praktis ShareTechNote.
+2. **Multi-Vendor Parameter Reconciliation**: Matriks padanan parameter radio lintas vendor (Ericsson MOM, Huawei MML, dan Nokia SRAN Rel-25R2).
+3. **Dynamic Chameleon Perspective Adaptation**: Penyesuaian persona teknis dinamis (Core SBA, RAN Optimization, O-RAN Cloud-Native, CEM/SOC, Field Drive Test).
+4. **Context Isolation & Disjoint Topic Shift Detection**: Algoritma pencegahan halusinasi silang topik percakapan multi-turn.
+5. **Channel Security & Anti-Ban Architecture**: Randomisasi entropi fingerprint SHA-256, exponential backoff, circuit breaker cooldown, dan sandbox egress guardrail.
+6. **Empirical Evaluation**: Validasi 100% pada 12 modul test suite otomatis.

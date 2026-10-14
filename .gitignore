@@ -1,7 +1,8 @@
-# Exclude markdown files except knowledge_sources and root README
+# Exclude markdown files except knowledge_sources, docs, and root README
 *.md
 **/*.md
 !README.md
+!docs/**/*.md
 !knowledge_sources/**/*.md
 
 # Dependencies
