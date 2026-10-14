@@ -294,22 +294,23 @@ Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan 
 /**
  * Mengekstrak kata kunci teknis dari teks untuk komparasi topik
  */
-function extractTopicKeywords(text) {
+export function extractTopicKeywords(text) {
   if (!text || typeof text !== 'string') return [];
   return text
     .toLowerCase()
     .replace(/[^\w\s-]/g, ' ')
     .split(/\s+/)
-    .filter(w => w.length > 2 && !/^(dan|yang|atau|untuk|pada|dari|dengan|dalam|ke|di|ini|itu|apa|bagaimana|kenapa|mengapa|apakah|bisa|tolong|dong|adalah|yaitu|cara|maksud|tentang|seperti|hal|nya|saja|juga|kok|deh|nih|tuh)$/i.test(w));
+    .filter(w => w.length > 2 && !/^(dan|yang|atau|untuk|pada|dari|dengan|dalam|ke|di|ini|itu|apa|bagaimana|kenapa|mengapa|apakah|bisa|tolong|dong|adalah|yaitu|cara|maksud|tentang|seperti|hal|nya|saja|juga|kok|deh|nih|tuh|gimana|kalo|kalau|saat|bila|jika)$/i.test(w));
 }
 
 /**
  * Mendeteksi apakah pertanyaan merupakan lanjutan kontekstual (Follow-Up)
- * atau pergeseran topik baru yang independen (Topic Shift).
+ * atau pergeseran topik baru yang independen (Topic Shift),
+ * serta menentukan apakah perlu konfirmasi interaktif ke pengguna.
  */
 export function evaluateConversationContext(question, recentHistory) {
   if (!recentHistory || recentHistory.length === 0) {
-    return { isFollowUp: false, reason: 'NO_RECENT_HISTORY' };
+    return { isFollowUp: false, needsConfirmation: false, reason: 'NO_RECENT_HISTORY' };
   }
 
   const cleanQ = question.trim().toLowerCase();
@@ -319,21 +320,21 @@ export function evaluateConversationContext(question, recentHistory) {
   // 1. Permintaan bahasa (misal: "In English please")
   const isLanguageFollowUp = /^\s*(in\s+english\s*(please)?|please\s*in\s*english|translate\s*to\s*english|english\s*version|tolong\s*bahasa\s*inggris|pake\s*bahasa\s*inggris|bahasa\s*inggris\s*dong)\s*$/i.test(question.trim());
   if (isLanguageFollowUp) {
-    return { isFollowUp: true, reason: 'LANGUAGE_SWITCH' };
+    return { isFollowUp: true, needsConfirmation: false, reason: 'LANGUAGE_SWITCH' };
   }
 
   // 2. Deteksi Kata Rujukan Eksplisit (Anaphoric / Deictic References)
   // Menunjuk langsung ke kasus sebelumnya, misal: "kasus ini", "masalah tadi", "kondisi tersebut", "penjelasan tadi"
   const hasExplicitReference = /\b(kasus\s*(ini|itu|tadi|tersebut)|masalah\s*(ini|itu|tadi|tersebut)|skenario\s*(ini|itu|tadi|tersebut)|kondisi\s*(ini|itu|tadi|tersebut)|penjelasan\s*(ini|tadi|tersebut)|tadi\s*kan|yang\s*tadi|dari\s*jawaban\s*(tadi|di\s*atas)|pada\s*sa\s*atau\s*nsa|sa\s*atau\s*nsa)\b/i.test(cleanQ);
   if (hasExplicitReference) {
-    return { isFollowUp: true, reason: 'EXPLICIT_REFERENCE' };
+    return { isFollowUp: true, needsConfirmation: false, reason: 'EXPLICIT_REFERENCE' };
   }
 
   // 3. Konjungsi Lanjutan Percakapan di Awal Kalimat (Continuity Conjunctions)
   // e.g., "terus solusinya apa?", "lalu apa dampaknya?", "berarti UE detach?", "nah kalau di 5G?"
   const hasContinuityStarter = /^(terus\b|lalu\b|selanjutnya\b|berarti\b|artinya\b|nah\s*kalau\b|nah\s*terus\b|jadi\s*kalau\b|kalau\s*gitu\b|kalo\s*gitu\b|kalau\s*begitu\b)/i.test(cleanQ);
   if (hasContinuityStarter) {
-    return { isFollowUp: true, reason: 'CONTINUITY_STARTER' };
+    return { isFollowUp: true, needsConfirmation: false, reason: 'CONTINUITY_STARTER' };
   }
 
   // 4. Kalimat Elipsis / Pendek Tanpa Subjek Lengkap (<40 karakter)
@@ -343,36 +344,31 @@ export function evaluateConversationContext(question, recentHistory) {
     /^(kalau|kalo|pada)\s*(di\s*)?(5g|4g|sa|nsa|lte|nr)\b/i.test(cleanQ)
   );
   if (isShortElliptical) {
-    return { isFollowUp: true, reason: 'SHORT_ELLIPTICAL' };
+    return { isFollowUp: true, needsConfirmation: false, reason: 'SHORT_ELLIPTICAL' };
   }
 
-  // 5. Cek apakah ini adalah Pertanyaan Mandiri Berdiri Sendiri (Self-Contained Structure)
-  const isSelfContainedStructure = /^(bagaimana\s*(cara|mekanisme|alur|proses|konsep|arsitektur)|jelaskan\s*(cara|mekanisme|alur|proses|konsep|arsitektur|apa)|apa\s*(itu|definisi|pengertian|fungsi|perbedaan|beda)|sebutkan|bagaimanakah)\b/i.test(cleanQ);
-
-  // 6. Evaluasi Overlap Kata Kunci (Topic Shift Detection)
+  // 5. Evaluasi Overlap Kata Kunci Teknis
   const newKeywords = extractTopicKeywords(cleanQ);
   const oldKeywords = extractTopicKeywords(lastTopic);
 
   const overlap = newKeywords.filter(k => oldKeywords.includes(k));
   const overlapRatio = newKeywords.length > 0 ? overlap.length / newKeywords.length : 0;
 
-  // Jika berstruktur mandiri dan tidak memiliki overlap signifikan dengan topik lama (<25%)
-  if (isSelfContainedStructure && overlapRatio < 0.25) {
-    return { isFollowUp: false, reason: 'SELF_CONTAINED_TOPIC_SHIFT' };
+  // Jika kata kunci teknis tumpang tindih tinggi (>= 40%), pasti pembahasan topik terkait
+  if (overlapRatio >= 0.4) {
+    return { isFollowUp: true, needsConfirmation: false, reason: 'STRONG_KEYWORD_OVERLAP', overlapRatio };
   }
 
-  // Jika pertanyaan panjang (>40 karakter) dengan entitas terpisah (0 overlap)
-  if (cleanQ.length >= 40 && overlapRatio === 0) {
-    return { isFollowUp: false, reason: 'DISJOINT_TOPIC_SHIFT' };
-  }
-
-  // Jika ada rujukan kata tunjuk umum ("ini", "itu") atau ada overlap kata kunci cukup tinggi (>=30%)
-  const hasDemonstrative = /\b(ini|itu|tersebut|tadi)\b/i.test(cleanQ);
-  if (hasDemonstrative || overlapRatio >= 0.3) {
-    return { isFollowUp: true, reason: 'KEYWORD_OVERLAP_OR_PRONOUN' };
-  }
-
-  return { isFollowUp: false, reason: 'DEFAULT_INDEPENDENT' };
+  // Jika overlap rendah (< 40%) saat ada riwayat sesi aktif:
+  // Butuh konfirmasi interaktif ke pengguna agar topik lama (misal: RRC Inactivity)
+  // tidak ter-mix dengan topik baru (misal: eSIM Transfer)
+  return {
+    isFollowUp: false,
+    needsConfirmation: true,
+    reason: 'TOPIC_DISJOINT_NEED_CONFIRM',
+    lastTopic: lastInteraction?.incoming_query || '',
+    overlapRatio
+  };
 }
 
 /**
@@ -380,18 +376,26 @@ export function evaluateConversationContext(question, recentHistory) {
  * Menggunakan Continuous Multi-Turn Context, Smart RAG Gating, dan Draw-Back Capacity Token
  */
 export async function answerGeneralTelcoQuestion(question, userId = 0, options = {}) {
-  const { contextTrack } = options;
+  const { contextTrack, forceNewTopic = false, forceFollowUp = false } = options;
   const startTime = Date.now();
 
   // DRAW-BACK CAPACITY TOKEN & TEMPORAL SESSION WINDOW:
   // Batasi riwayat maksimal 3 percakapan dan kedaluwarsa setelah 20 menit (mencegah topik pagi terbawa ke siang)
   const maxHistory = parseInt(process.env.MAX_CONVERSATION_HISTORY || '3', 10);
   const sessionTimeoutMinutes = parseInt(process.env.CONVERSATION_SESSION_TIMEOUT_MINUTES || '20', 10);
-  const recentHistory = getRecentLlmConversation(userId, maxHistory, sessionTimeoutMinutes);
+  const recentHistory = forceNewTopic ? [] : getRecentLlmConversation(userId, maxHistory, sessionTimeoutMinutes);
 
   // 1. Deteksi Pertanyaan Lanjutan Kontekstual vs Pergeseran Topik Baru
-  const contextEval = evaluateConversationContext(question, recentHistory);
-  const isConversationalFollowUp = contextEval.isFollowUp;
+  let isConversationalFollowUp = false;
+  let contextEval = { isFollowUp: false, reason: 'NO_RECENT_HISTORY' };
+
+  if (forceFollowUp && recentHistory.length > 0) {
+    isConversationalFollowUp = true;
+    contextEval = { isFollowUp: true, reason: 'USER_CONFIRMED_FOLLOW_UP' };
+  } else if (!forceNewTopic && recentHistory.length > 0) {
+    contextEval = evaluateConversationContext(question, recentHistory);
+    isConversationalFollowUp = contextEval.isFollowUp;
+  }
 
   const lastInteraction = recentHistory[recentHistory.length - 1];
   const lastTopic = lastInteraction?.incoming_query || '';

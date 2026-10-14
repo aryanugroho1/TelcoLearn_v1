@@ -30,6 +30,7 @@ const getAllFeedbacks = db.getAllFeedbacks || (() => []);
 const getFeedbackMetrics = db.getFeedbackMetrics || (() => ({ total: 0, pending: 0 }));
 const updateFeedbackStatus = db.updateFeedbackStatus || (() => null);
 const clearLlmConversation = db.clearLlmConversation || (() => false);
+const getRecentLlmConversation = db.getRecentLlmConversation || (() => []);
 
 import {
   MESSAGES,
@@ -39,7 +40,13 @@ import {
   isDriveTestInquiry,
   isObviousNonTelcoQuery
 } from '../config/constants.js';
-import { analyzeTelcoLog, answerGeneralTelcoQuestion, analyzeTelcoImage, analyzeTelcoDocument } from './geminiService.js';
+import {
+  analyzeTelcoLog,
+  answerGeneralTelcoQuestion,
+  analyzeTelcoImage,
+  analyzeTelcoDocument,
+  evaluateConversationContext
+} from './geminiService.js';
 import { generateTelcoSimulation } from './simulationService.js';
 import { sendSafeReply, sentMessageIds, recordSentMessageId } from './antiBanService.js';
 import { formatWhatsAppAdminReport, sendDailyEmailReport } from './reportingService.js';
@@ -439,6 +446,64 @@ Silakan langsung:
       }
     }
 
+    // 4.05. STATE: AWAITING_TOPIC_CONFIRM (Konfirmasi apakah Topik Baru atau Terkait Topik Lama)
+    if (currentState === 'AWAITING_TOPIC_CONFIRM') {
+      if (['0', '/menu', 'menu', 'kembali', 'home', '/batal', 'batal'].includes(lowerText)) {
+        updateUserState(user.jid, 'IDLE', null);
+        await reply({ text: `❌ *Konfirmasi dibatalkan.* Kembali ke menu utama:\n\n${MESSAGES.MAIN_MENU(user)}` });
+        return;
+      }
+
+      let pendingQuestion = '';
+      let lastTopic = '';
+      try {
+        const payload = JSON.parse(user.state_payload || '{}');
+        pendingQuestion = payload.pending_question || '';
+        lastTopic = payload.last_topic || '';
+      } catch (e) {}
+
+      if (!pendingQuestion) {
+        updateUserState(user.jid, 'IDLE', null);
+        await reply({ text: `Sesi konfirmasi kedaluwarsa. Silakan ajukan pertanyaan Anda kembali.${LOOPBACK_FOOTER}` });
+        return;
+      }
+
+      const isNewTopicChoice = /^(1|baru|topik baru|new|new topic|bukan|beda|ganti topik|topik lain)$/i.test(lowerText.trim());
+      const isRelatedChoice = /^(2|terkait|masih terkait|lanjut|lanjutan|sambung|ya|yes|betul|benar|sama)$/i.test(lowerText.trim());
+
+      if (isNewTopicChoice) {
+        // Bersihkan memori percakapan lama agar tidak tercampur
+        clearLlmConversation(user.id);
+        updateUserState(user.jid, 'IDLE', null);
+        await reply({ text: `🆕 *Memulai Topik Baru:* Menganalisis tanpa riwayat sebelumnya...` });
+        const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
+          contextTrack: user.focus_track,
+          forceNewTopic: true
+        });
+        await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
+        return;
+      } else if (isRelatedChoice) {
+        updateUserState(user.jid, 'IDLE', null);
+        await reply({ text: `🔗 *Melanjutkan Pembahasan:* Menghubungkan dengan konteks sebelumnya...` });
+        const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
+          contextTrack: user.focus_track,
+          forceFollowUp: true
+        });
+        await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
+        return;
+      } else {
+        if (lowerText.startsWith('/')) {
+          updateUserState(user.jid, 'IDLE', null);
+          // Lanjut ke handler slash command di bawah
+        } else {
+          await reply({
+            text: `⚠️ Mohon konfirmasi dengan memilih angka *1* atau *2*:\n\n1️⃣ *Topik Baru* (Mulai pembahasan baru)\n2️⃣ *Masih Terkait* (Lanjutan dari pembahasan tadi)\n\n_(Ketik *0* untuk membatalkan)_`
+          });
+          return;
+        }
+      }
+    }
+
     // 4. STATE: AWAITING QUIZ ANSWER
     if (currentState === 'AWAITING_QUIZ_ANSWER') {
       let activeQuizId = null;
@@ -547,6 +612,16 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
     // 0 / Menu Utama
     if (lowerText === '/menu' || lowerText === 'menu' || lowerText === '0' || lowerText === 'kembali' || lowerText === 'home' || lowerText === 'main menu') {
       await reply({ text: MESSAGES.MAIN_MENU(user) });
+      return;
+    }
+
+    // Reset Topik Diskusi Manual (/clear, /topikbaru, /newtopic, /cleartopic)
+    if (['/clear', '/topikbaru', '/newtopic', '/cleartopic', '/reset-topik', '/topik-baru'].includes(lowerText)) {
+      clearLlmConversation(user.id);
+      updateUserState(user.jid, 'IDLE', null);
+      await reply({
+        text: `🧹 *Topik Diskusi Berhasil Direset!*\nRiwayat percakapan sebelumnya telah dibersihkan.\n\nSilakan ajukan pertanyaan atau topik baru Anda!${LOOPBACK_FOOTER}`
+      });
       return;
     }
 
@@ -924,6 +999,42 @@ Asisten AI & Mentor Diagnostik Teknis spesialis *Telekomunikasi, Protokol Radio 
 
     // 9. TANYA JAWAB BEBAS TELEKOMUNIKASI (Gemini AI Assistant & ShareTechNote RAG)
     if (rawText.trim().length >= 3) {
+      // 9.1 Pengecekan Disjoint Topic Shift & Pertanyaan Balik Interaktif
+      const maxHistory = parseInt(process.env.MAX_CONVERSATION_HISTORY || '3', 10);
+      const sessionTimeoutMinutes = parseInt(process.env.CONVERSATION_SESSION_TIMEOUT_MINUTES || '20', 10);
+      const recentHistory = getRecentLlmConversation(user.id, maxHistory, sessionTimeoutMinutes);
+
+      if (recentHistory && recentHistory.length > 0) {
+        const contextEval = evaluateConversationContext(rawText, recentHistory);
+        if (contextEval.needsConfirmation) {
+          const lastTopic = contextEval.lastTopic || recentHistory[recentHistory.length - 1]?.incoming_query || 'Topik sebelumnya';
+          const truncatedLastTopic = lastTopic.length > 70 ? lastTopic.slice(0, 67) + '...' : lastTopic;
+          const truncatedCurrent = rawText.length > 70 ? rawText.slice(0, 67) + '...' : rawText;
+
+          updateUserState(user.jid, 'AWAITING_TOPIC_CONFIRM', {
+            pending_question: rawText,
+            last_topic: lastTopic
+          });
+
+          const confirmMsg = `🤔 *Konfirmasi Topik Diskusi*
+Pembahasan sebelumnya mengenai:
+👉 _"${truncatedLastTopic}"_
+
+Pertanyaan Anda saat ini:
+👉 _"${truncatedCurrent}"_
+
+Apakah ini *Topik Baru* atau *Masih Terkait* dengan pembahasan sebelumnya?
+
+1️⃣ *Topik Baru* (Mulai pembahasan baru tanpa riwayat sebelumnya)
+2️⃣ *Masih Terkait* (Lanjutan pembahasan studi kasus tadi)
+
+_(Balas *1* untuk topik baru, atau *2* jika masih terkait)_`;
+
+          await reply({ text: confirmMsg });
+          return;
+        }
+      }
+
       const answer = await answerGeneralTelcoQuestion(rawText, user.id, { contextTrack: user.focus_track });
       await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
       return;

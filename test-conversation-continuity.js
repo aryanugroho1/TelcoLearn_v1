@@ -48,8 +48,9 @@ async function testConversationContinuity() {
   console.log('----------------------------------------------------');
 
   // Validasi: Respon WAJIB membahas throughput dalam konteks SA / NSA
-  const hasThroughputContext = /\b(throughput|kecepatan|penurunan|sinyal|rsrp|rsrq|anchor|split bearer|gnb|enb|loading|prb|bottleneck)\b/i.test(res2);
-  const hasSAandNSA = /\b(sa|standalone)\b/i.test(res2) && /\b(nsa|non-standalone)\b/i.test(res2);
+  const cleanRes2 = res2.replace(/[_*`]/g, ' ');
+  const hasThroughputContext = /\b(throughput|kecepatan|penurunan|sinyal|rsrp|rsrq|anchor|split bearer|gnb|enb|loading|prb|bottleneck)\b/i.test(cleanRes2);
+  const hasSAandNSA = /\b(sa|standalone)\b/i.test(cleanRes2) && /\b(nsa|non-standalone)\b/i.test(cleanRes2);
   const isGenericTheoryOnly = res2.startsWith('5G Standalone (SA) adalah arsitektur mandiri');
 
   if (hasThroughputContext && hasSAandNSA && !isGenericTheoryOnly) {

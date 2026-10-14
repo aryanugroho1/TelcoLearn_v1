@@ -301,19 +301,29 @@ export function logLlmConversation(userId, incomingQuery, aiResponse, latencyMs 
   const totalTokens = usage.totalTokens || (promptTokens + outputTokens);
   const modelName = usage.modelName || 'gemini-3.8-flash';
 
+  const nowIso = new Date().toISOString();
+
   try {
     const stmt = db.prepare(`
-      INSERT INTO llm_conversation_logs (user_id, incoming_query, ai_response, latency_ms, prompt_tokens, output_tokens, total_tokens, model_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO llm_conversation_logs (user_id, incoming_query, ai_response, latency_ms, prompt_tokens, output_tokens, total_tokens, model_name, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(validUserId, incomingQuery, aiResponse, latencyMs, promptTokens, outputTokens, totalTokens, modelName);
+    stmt.run(validUserId, incomingQuery, aiResponse, latencyMs, promptTokens, outputTokens, totalTokens, modelName, nowIso);
   } catch (err) {
-    // Fallback jika kolom baru belum termigrasi
-    const fallbackStmt = db.prepare(`
-      INSERT INTO llm_conversation_logs (user_id, incoming_query, ai_response, latency_ms)
-      VALUES (?, ?, ?, ?)
-    `);
-    fallbackStmt.run(validUserId, incomingQuery, aiResponse, latencyMs);
+    // Fallback jika skema belum termigrasi
+    try {
+      const fallbackStmt = db.prepare(`
+        INSERT INTO llm_conversation_logs (user_id, incoming_query, ai_response, latency_ms, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      fallbackStmt.run(validUserId, incomingQuery, aiResponse, latencyMs, nowIso);
+    } catch (fallbackErr) {
+      const legacyStmt = db.prepare(`
+        INSERT INTO llm_conversation_logs (user_id, incoming_query, ai_response, latency_ms)
+        VALUES (?, ?, ?, ?)
+      `);
+      legacyStmt.run(validUserId, incomingQuery, aiResponse, latencyMs);
+    }
   }
 }
 
@@ -336,9 +346,21 @@ export function getRecentLlmConversation(userId, limit = 5, maxAgeMinutes = 20) 
     const maxAgeMs = maxAgeMinutes * 60 * 1000;
     const validRows = rows.filter(row => {
       if (!row.created_at) return false;
-      const dateStr = row.created_at.includes('Z') ? row.created_at : row.created_at.replace(' ', 'T') + 'Z';
-      const createdAtMs = new Date(dateStr).getTime();
-      return !isNaN(createdAtMs) && (now - createdAtMs) <= maxAgeMs;
+      let createdAtMs = 0;
+      if (row.created_at.includes('Z')) {
+        createdAtMs = new Date(row.created_at).getTime();
+      } else {
+        const utcMs = new Date(row.created_at.replace(' ', 'T') + 'Z').getTime();
+        if (utcMs - now > 60000) {
+          createdAtMs = new Date(row.created_at.replace(' ', 'T')).getTime();
+        } else {
+          createdAtMs = utcMs;
+        }
+      }
+      if (isNaN(createdAtMs)) return false;
+      const ageMs = now - createdAtMs;
+      // Validasi ketat: usia percakapan harus positif (toleransi clock skew 60 detik) dan <= maxAgeMs
+      return ageMs >= -60000 && ageMs <= maxAgeMs;
     });
 
     return validRows.reverse();
