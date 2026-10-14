@@ -51,16 +51,24 @@ export function getUserByJid(jid) {
   return stmt.get(jid) || null;
 }
 
-export function createUser({ jid, phone_number, display_name = 'Pelajar Telco', focus_track = 'protocol_qa', reminder_preference = 'all', current_state = 'IDLE' }) {
+export function createUser({
+  jid,
+  phone_number,
+  display_name = 'Pelajar Telco',
+  focus_track = 'protocol_qa',
+  preferred_language = 'id',
+  reminder_preference = 'all',
+  current_state = 'IDLE'
+}) {
   const db = getDb();
   const stmt = db.prepare(`
-    INSERT INTO users (jid, phone_number, display_name, focus_track, reminder_preference, current_state)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO users (jid, phone_number, display_name, focus_track, preferred_language, reminder_preference, current_state)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(jid) DO UPDATE SET
       display_name = excluded.display_name,
       updated_at = CURRENT_TIMESTAMP
   `);
-  stmt.run(jid, phone_number, display_name, focus_track, reminder_preference, current_state);
+  stmt.run(jid, phone_number, display_name, focus_track, preferred_language, reminder_preference, current_state);
   return getUserByJid(jid);
 }
 
@@ -75,7 +83,7 @@ export function updateUserState(jid, state, payload = null) {
   stmt.run(state, payloadStr, jid);
 }
 
-export function updateUserPreferences(jid, { focus_track, reminder_preference, display_name }) {
+export function updateUserPreferences(jid, { focus_track, reminder_preference, display_name, preferred_language }) {
   const db = getDb();
   const updates = [];
   const params = [];
@@ -83,6 +91,10 @@ export function updateUserPreferences(jid, { focus_track, reminder_preference, d
   if (focus_track) {
     updates.push('focus_track = ?');
     params.push(focus_track);
+  }
+  if (preferred_language) {
+    updates.push('preferred_language = ?');
+    params.push(preferred_language);
   }
   if (reminder_preference) {
     updates.push('reminder_preference = ?');
@@ -100,6 +112,13 @@ export function updateUserPreferences(jid, { focus_track, reminder_preference, d
 
   const query = `UPDATE users SET ${updates.join(', ')} WHERE jid = ?`;
   db.prepare(query).run(...params);
+}
+
+export function updateUserLanguage(jid, lang) {
+  const validLang = lang === 'en' ? 'en' : 'id';
+  const db = getDb();
+  db.prepare('UPDATE users SET preferred_language = ?, updated_at = CURRENT_TIMESTAMP WHERE jid = ?').run(validLang, jid);
+  return getUserByJid(jid);
 }
 
 export function updateUserStreak(jid, isCorrect) {

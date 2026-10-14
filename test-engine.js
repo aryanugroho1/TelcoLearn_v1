@@ -152,21 +152,33 @@ async function runTestSuite() {
     throw new Error('Handler /streak gagal merespons.');
   }
 
-  // 8. Onboarding End-to-End Simulation
-  console.log('\n▶️ [Test 8] Complete Onboarding Flow Simulation...');
+  // 8. Bilingual Onboarding End-to-End Simulation
+  console.log('\n▶️ [Test 8] Complete Bilingual Onboarding Flow Simulation...');
   const newJid = '628881234567@s.whatsapp.net';
   db.prepare('DELETE FROM users WHERE jid = ?').run(newJid);
 
-  // User baru kirim "Halo TelcoLearn"
+  // 8.1 Skenario Pengguna Indonesia: Kirim "Halo TelcoLearn"
   await handleIncomingMessage(mockSock, {
     key: { remoteJid: newJid, fromMe: false },
     message: { conversation: 'Halo TelcoLearn' }
   });
   let newUser = getUserByJid(newJid);
-  if (newUser && newUser.current_state === 'ONBOARDING_TRACK') {
-    console.log('✅ [Pass] Skenario 1.1: User baru otomatis masuk state ONBOARDING_TRACK');
+  if (newUser && newUser.current_state === 'ONBOARDING_LANG') {
+    console.log('✅ [Pass] Skenario 1.1: User baru otomatis masuk state ONBOARDING_LANG.');
   } else {
-    throw new Error('Onboarding initial state gagal.');
+    throw new Error('Onboarding initial state gagal, expected ONBOARDING_LANG, got ' + newUser?.current_state);
+  }
+
+  // User pilih "1" (Bahasa Indonesia 🇮🇩)
+  await handleIncomingMessage(mockSock, {
+    key: { remoteJid: newJid, fromMe: false },
+    message: { conversation: '1' }
+  });
+  newUser = getUserByJid(newJid);
+  if (newUser && newUser.current_state === 'ONBOARDING_TRACK' && newUser.preferred_language === 'id') {
+    console.log('✅ [Pass] Skenario 1.2: Pemilihan bahasa "1" (Bahasa Indonesia) tersimpan & beralih ke ONBOARDING_TRACK.');
+  } else {
+    throw new Error('Onboarding language selection gagal.');
   }
 
   // User pilih "4" (Log Analysis / log_telco)
@@ -176,9 +188,72 @@ async function runTestSuite() {
   });
   newUser = getUserByJid(newJid);
   if (newUser && newUser.current_state === 'IDLE' && newUser.focus_track === 'log_telco') {
-    console.log('✅ [Pass] Skenario 1.2: Pemilihan track "4" (log_telco) berhasil disimpan & beralih ke state IDLE.');
+    console.log('✅ [Pass] Skenario 1.3: Pemilihan track "4" (log_telco) berhasil disimpan & beralih ke state IDLE.');
   } else {
     throw new Error('Onboarding track selection gagal.');
+  }
+
+  // 8.2 Skenario Pengguna Bahasa Inggris: Kirim "Hi"
+  const enJid = '628887654321@s.whatsapp.net';
+  db.prepare('DELETE FROM users WHERE jid = ?').run(enJid);
+
+  await handleIncomingMessage(mockSock, {
+    key: { remoteJid: enJid, fromMe: false },
+    message: { conversation: 'Hi TelcoLearn' }
+  });
+  let enUser = getUserByJid(enJid);
+  if (enUser && enUser.current_state === 'ONBOARDING_LANG') {
+    console.log('✅ [Pass] Skenario 2.1: English user baru masuk state ONBOARDING_LANG.');
+  } else {
+    throw new Error('English onboarding initial state gagal.');
+  }
+
+  // English User selects "2" (English 🇬🇧)
+  await handleIncomingMessage(mockSock, {
+    key: { remoteJid: enJid, fromMe: false },
+    message: { conversation: '2' }
+  });
+  enUser = getUserByJid(enJid);
+  if (enUser && enUser.current_state === 'ONBOARDING_TRACK' && enUser.preferred_language === 'en') {
+    console.log('✅ [Pass] Skenario 2.2: English user memilih "2" (en), tersimpan dan beralih ke ONBOARDING_TRACK.');
+  } else {
+    throw new Error('English onboarding language selection gagal.');
+  }
+
+  // English User selects track "1" (4G/5G Protocol QA)
+  await handleIncomingMessage(mockSock, {
+    key: { remoteJid: enJid, fromMe: false },
+    message: { conversation: '1' }
+  });
+  enUser = getUserByJid(enJid);
+  const enAckMsg = sentMessages[sentMessages.length - 1].content.text;
+  if (enUser && enUser.current_state === 'IDLE' && enUser.focus_track === 'protocol_qa' && enAckMsg.includes('Your Study Track is set to')) {
+    console.log('✅ [Pass] Skenario 2.3: English user menerima balasan onboarding berbahasa Inggris.');
+  } else {
+    throw new Error('English onboarding track confirmation text gagal.');
+  }
+
+  // 8.3 Test Slash Command /lang en dan /lang id
+  await handleIncomingMessage(mockSock, {
+    key: { remoteJid: newJid, fromMe: false },
+    message: { conversation: '/lang en' }
+  });
+  newUser = getUserByJid(newJid);
+  if (newUser.preferred_language === 'en') {
+    console.log('✅ [Pass] Skenario 3.1: Command /lang en berhasil mengubah preferensi ke English.');
+  } else {
+    throw new Error('/lang en gagal memperbarui bahasa.');
+  }
+
+  await handleIncomingMessage(mockSock, {
+    key: { remoteJid: newJid, fromMe: false },
+    message: { conversation: '/lang id' }
+  });
+  newUser = getUserByJid(newJid);
+  if (newUser.preferred_language === 'id') {
+    console.log('✅ [Pass] Skenario 3.2: Command /lang id berhasil mengubah preferensi kembali ke Bahasa Indonesia.');
+  } else {
+    throw new Error('/lang id gagal memperbarui bahasa.');
   }
 
   // 9. Interactive Commands (/track, /jadwal, /belajar, /quiz, /batal)

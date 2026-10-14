@@ -12,6 +12,7 @@ const {
   createUser,
   updateUserState,
   updateUserPreferences,
+  updateUserLanguage,
   updateUserStreak,
   getNextModuleForUser,
   markModuleProgress,
@@ -263,13 +264,14 @@ export async function handleIncomingMessage(sock, msg) {
         jid: userDbKey,
         phone_number: phoneNumber,
         display_name: pushName,
-        current_state: (isSelfChat || isFreeInquiry || isMediaInquiry) ? 'IDLE' : 'ONBOARDING_TRACK',
+        current_state: (isSelfChat || isFreeInquiry || isMediaInquiry) ? 'IDLE' : 'ONBOARDING_LANG',
         focus_track: 'protocol_qa',
+        preferred_language: 'id',
         reminder_preference: 'all'
       });
       console.log(`👋 [User Baru] Terdaftar: ${userDbKey} (State: ${user.current_state})`);
       if (!isSelfChat && !isFreeInquiry && !isMediaInquiry) {
-        await reply({ text: MESSAGES.WELCOME_ONBOARDING });
+        await reply({ text: MESSAGES.WELCOME_LANGUAGE });
         return;
       }
     }
@@ -345,37 +347,75 @@ export async function handleIncomingMessage(sock, msg) {
     const currentState = user.current_state || 'IDLE';
 
     // 2. GREETING & ONBOARDING INITIAL TRIGGER
-    // Ketika pengguna mengirimkan halo atau pesan pembuka, kirim onboarding menu preferensi
+    // Ketika pengguna mengirimkan halo atau pesan pembuka, mulai dari pemilihan bahasa (Bilingual)
     if (isGreeting) {
-      console.log(`👋 [Greeting] Pengguna ${user.jid} mengirimkan salam "${rawText}". Mengarahkan ke ONBOARDING_TRACK.`);
-      updateUserState(user.jid, 'ONBOARDING_TRACK', null);
-      await reply({ text: MESSAGES.WELCOME_ONBOARDING });
+      console.log(`👋 [Greeting] Pengguna ${user.jid} mengirimkan salam "${rawText}". Mengarahkan ke ONBOARDING_LANG.`);
+      updateUserState(user.jid, 'ONBOARDING_LANG', null);
+      await reply({ text: MESSAGES.WELCOME_LANGUAGE });
       return;
     }
 
     // Reset command darurat kapan saja
     if (lowerText === '/reset') {
-      updateUserState(user.jid, 'ONBOARDING_TRACK', null);
-      await reply({ text: MESSAGES.WELCOME_ONBOARDING });
+      updateUserState(user.jid, 'ONBOARDING_LANG', null);
+      await reply({ text: MESSAGES.WELCOME_LANGUAGE });
       return;
+    }
+
+    // 2.5. STATE: ONBOARDING_LANG (Memilih Bahasa: 1 = Bahasa Indonesia, 2 = English)
+    if (currentState === 'ONBOARDING_LANG') {
+      const choice = rawText.trim().toLowerCase();
+      if (['1', 'id', 'indonesia', 'indo', 'bahasa', 'bahasa indonesia'].includes(choice)) {
+        updateUserPreferences(user.jid, { preferred_language: 'id' });
+        updateUserState(user.jid, 'ONBOARDING_TRACK', null);
+        user.preferred_language = 'id';
+        await reply({ text: MESSAGES.WELCOME_TRACK_ID });
+        return;
+      } else if (['2', 'en', 'english', 'inggris'].includes(choice)) {
+        updateUserPreferences(user.jid, { preferred_language: 'en' });
+        updateUserState(user.jid, 'ONBOARDING_TRACK', null);
+        user.preferred_language = 'en';
+        await reply({ text: MESSAGES.WELCOME_TRACK_EN });
+        return;
+      } else if (['0', '/menu', 'menu', 'kembali'].includes(choice)) {
+        updateUserState(user.jid, 'IDLE', null);
+        await reply({ text: MESSAGES.MAIN_MENU(user) });
+        return;
+      } else if (choice.length === 1 && ['3', '4', '5', '6', '7', '8', '9'].includes(choice)) {
+        await reply({
+          text: `🌐 *PILIH BAHASA / CHOOSE LANGUAGE:*
+Mohon ketik angka *1* atau *2* / Please reply with *1* or *2*:
+
+1️⃣ *Bahasa Indonesia* 🇮🇩
+2️⃣ *English* 🇬🇧
+
+_(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
+        });
+        return;
+      } else {
+        // User langsung mengetik pertanyaan teknis bebas / slash command:
+        // Auto-complete onboarding ke IDLE agar tidak memblokir user
+        console.log(`⏩ [Auto-Bypass Onboarding Lang] User ${user.jid} mengirim "${rawText}", auto-complete onboarding ke IDLE.`);
+        const isEnglishInquiry = /\b(what|how|why|when|where|which|who|can|is|are|the|in|explain|analyze|tell)\b/i.test(rawText);
+        const autoLang = isEnglishInquiry ? 'en' : 'id';
+        updateUserPreferences(user.jid, { focus_track: 'protocol_qa', preferred_language: autoLang, reminder_preference: 'all' });
+        updateUserState(user.jid, 'IDLE', null);
+        user = getUserByJid(user.jid);
+      }
     }
 
     // 3. STATE: ONBOARDING_TRACK (Memilih 1, 2, 3, atau 4)
     if (currentState === 'ONBOARDING_TRACK') {
       const choice = rawText.trim();
+      const isEnglishUser = user.preferred_language === 'en';
       if (['1', '2', '3', '4'].includes(choice)) {
         const selected = FOCUS_TRACKS[choice];
         updateUserPreferences(user.jid, { focus_track: selected.key });
         updateUserState(user.jid, 'IDLE', null);
-        const ackMsg = `🎯 *Fokus Belajar Anda Diatur ke:* *${selected.label}*
-
-Pembahasan dan materi Anda sekarang difokuskan ke *${selected.label}*.
-
-Silakan langsung:
-• Bertanya bebas seputar topik ini (misal: call flow, RSRP/SINR, log modem, dll.)
-• Ketik *1* (atau */belajar*) untuk membaca modul harian
-• Ketik *2* (atau */quiz*) untuk latihan kuis interaktif
-• Ketik *0* (atau */menu*) untuk membuka menu navigasi utama${LOOPBACK_FOOTER}`;
+        user.focus_track = selected.key;
+        const ackMsg = isEnglishUser
+          ? `${MESSAGES.ONBOARDING_ACK_EN(selected.label)}${LOOPBACK_FOOTER}`
+          : `${MESSAGES.ONBOARDING_ACK_ID(selected.label)}${LOOPBACK_FOOTER}`;
         await reply({ text: ackMsg });
         return;
       } else if (['0', '/menu', 'menu', 'kembali'].includes(choice)) {
@@ -383,14 +423,15 @@ Silakan langsung:
         await reply({ text: MESSAGES.MAIN_MENU(user) });
         return;
       } else if (choice.length === 1 && ['5', '6', '7', '8', '9'].includes(choice)) {
-        await reply({
-          text: `⚠️ Mohon ketik angka *1*, *2*, *3*, atau *4* untuk memilih fokus belajar:\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_(Atau ketik *0* untuk langsung ke menu utama)_`
-        });
+        const promptMsg = isEnglishUser
+          ? `⚠️ Please reply with *1*, *2*, *3*, or *4* to select your study track:\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_(Or type *0* to go to the main menu)_`
+          : `⚠️ Mohon ketik angka *1*, *2*, *3*, atau *4* untuk memilih fokus belajar:\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_(Atau ketik *0* untuk langsung ke menu utama)_`;
+        await reply({ text: promptMsg });
         return;
       } else {
         // User langsung mengetik pertanyaan teknis bebas / slash command:
         // Auto-complete onboarding ke IDLE agar tidak memblokir user
-        console.log(`⏩ [Auto-Bypass Onboarding] User ${user.jid} mengirim "${rawText}", auto-complete onboarding ke IDLE.`);
+        console.log(`⏩ [Auto-Bypass Onboarding Track] User ${user.jid} mengirim "${rawText}", auto-complete onboarding ke IDLE.`);
         updateUserPreferences(user.jid, { focus_track: 'protocol_qa', reminder_preference: 'all' });
         updateUserState(user.jid, 'IDLE', null);
         user = getUserByJid(user.jid); // Muat ulang objek user
@@ -625,36 +666,83 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
       return;
     }
 
+    // Ganti Bahasa Bot (/lang, /bahasa, /language)
+    if (lowerText === '/lang' || lowerText.startsWith('/lang ') || lowerText === '/bahasa' || lowerText.startsWith('/bahasa ') || lowerText === '/language' || lowerText.startsWith('/language ')) {
+      const arg = lowerText.replace(/^\/(lang|bahasa|language)\s*/i, '').trim();
+      if (['en', 'english', 'inggris', '2'].includes(arg)) {
+        updateUserPreferences(user.jid, { preferred_language: 'en' });
+        user.preferred_language = 'en';
+        await reply({
+          text: `🌐 *Language updated to English 🇬🇧.*
+All future menus, quizzes, and automated reminders will be delivered in English.
+_(Type */lang id* anytime to switch back to Bahasa Indonesia)_${LOOPBACK_FOOTER}`
+        });
+        return;
+      } else if (['id', 'indonesia', 'indo', 'bahasa', '1'].includes(arg)) {
+        updateUserPreferences(user.jid, { preferred_language: 'id' });
+        user.preferred_language = 'id';
+        await reply({
+          text: `🌐 *Bahasa diubah ke Bahasa Indonesia 🇮🇩.*
+Menu, materi, dan pengingat harian Anda akan disajikan dalam Bahasa Indonesia.
+_(Ketik */lang en* kapan saja untuk beralih ke Bahasa Inggris)_${LOOPBACK_FOOTER}`
+        });
+        return;
+      } else {
+        await reply({
+          text: `🌐 *PENGATURAN BAHASA / LANGUAGE SETTINGS*
+
+Silakan pilih bahasa yang Anda inginkan / Choose your language:
+1️⃣ *Bahasa Indonesia* 🇮🇩 (Ketik */lang id*)
+2️⃣ *English* 🇬🇧 (Type */lang en*)
+
+Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Bahasa Indonesia 🇮🇩'}*${LOOPBACK_FOOTER}`
+        });
+        return;
+      }
+    }
+
     if (lowerText === '/track' || lowerText.startsWith('/track ')) {
       const arg = lowerText.replace('/track', '').trim();
+      const isEnglishUser = user.preferred_language === 'en';
       if (FOCUS_TRACKS[arg]) {
         const selected = FOCUS_TRACKS[arg];
         updateUserPreferences(user.jid, { focus_track: selected.key });
-        await reply({ text: `✅ *Jalur fokus belajar Anda diubah menjadi:* ${selected.label}${LOOPBACK_FOOTER}` });
+        user.focus_track = selected.key;
+        const ack = isEnglishUser
+          ? `✅ *Your study track has been updated to:* ${selected.label}${LOOPBACK_FOOTER}`
+          : `✅ *Jalur fokus belajar Anda diubah menjadi:* ${selected.label}${LOOPBACK_FOOTER}`;
+        await reply({ text: ack });
       } else {
-        await reply({
-          text: `🎯 *PILIH JALUR FOKUS BELAJAR:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Ketik */track 1*, */track 2*, */track 3*, atau */track 4*_${LOOPBACK_FOOTER}`
-        });
+        const prompt = isEnglishUser
+          ? `🎯 *SELECT STUDY TRACK:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Type */track 1*, */track 2*, */track 3*, or */track 4*_${LOOPBACK_FOOTER}`
+          : `🎯 *PILIH JALUR FOKUS BELAJAR:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Ketik */track 1*, */track 2*, */track 3*, atau */track 4*_${LOOPBACK_FOOTER}`;
+        await reply({ text: prompt });
       }
       return;
     }
 
-    if (lowerText === '/jadwal' || lowerText.startsWith('/jadwal ')) {
-      const arg = lowerText.replace('/jadwal', '').trim();
+    if (lowerText === '/jadwal' || lowerText.startsWith('/jadwal ') || lowerText === '/schedule' || lowerText.startsWith('/schedule ')) {
+      const arg = lowerText.replace(/^\/(jadwal|schedule)\s*/i, '').trim();
+      const isEnglishUser = user.preferred_language === 'en';
       if (REMINDER_PREFERENCES[arg]) {
         const selected = REMINDER_PREFERENCES[arg];
         updateUserPreferences(user.jid, { reminder_preference: selected.key });
-        await reply({ text: `✅ *Jadwal notifikasi Anda diubah menjadi:* ${selected.label}${LOOPBACK_FOOTER}` });
+        user.reminder_preference = selected.key;
+        const ack = isEnglishUser
+          ? `✅ *Your daily notification schedule is set to:* ${selected.label}${LOOPBACK_FOOTER}`
+          : `✅ *Jadwal notifikasi Anda diubah menjadi:* ${selected.label}${LOOPBACK_FOOTER}`;
+        await reply({ text: ack });
       } else {
-        await reply({
-          text: `⏰ *PILIH JADWAL NOTIFIKASI HARIAN:*\n\n1️⃣ Pagi (07:30 WIB)\n2️⃣ Siang (12:30 WIB)\n3️⃣ Lengkap (Pagi, Siang, Malam)\n\n_Ketik */jadwal 1*, */jadwal 2*, atau */jadwal 3*_${LOOPBACK_FOOTER}`
-        });
+        const prompt = isEnglishUser
+          ? `⏰ *CHOOSE DAILY REMINDER SCHEDULE:*\n\n1️⃣ Morning (07:30 WIB)\n2️⃣ Afternoon (12:30 WIB)\n3️⃣ All (Morning, Afternoon, Night)\n\n_Type */schedule 1*, */schedule 2*, or */schedule 3*_${LOOPBACK_FOOTER}`
+          : `⏰ *PILIH JADWAL NOTIFIKASI HARIAN:*\n\n1️⃣ Pagi (07:30 WIB)\n2️⃣ Siang (12:30 WIB)\n3️⃣ Lengkap (Pagi, Siang, Malam)\n\n_Ketik */jadwal 1*, */jadwal 2*, atau */jadwal 3*_${LOOPBACK_FOOTER}`;
+        await reply({ text: prompt });
       }
       return;
     }
 
-    // Shortcut 1 -> /belajar
-    if (lowerText === '/belajar' || lowerText === 'belajar' || lowerText === '1') {
+    // Shortcut 1 -> /belajar atau /learn
+    if (lowerText === '/belajar' || lowerText === 'belajar' || lowerText === '/learn' || lowerText === 'learn' || lowerText === '1') {
       const nextModule = getNextModuleForUser(user.id);
       if (!nextModule) {
         await reply({ text: `${MESSAGES.NO_MORE_MODULES}${LOOPBACK_FOOTER}` });
@@ -719,8 +807,8 @@ Pertahankan streak Anda dengan menjawab kuis harian! Ketik */quiz* (atau *2*) se
       return;
     }
 
-    if (lowerText.startsWith('/catat')) {
-      const noteBody = rawText.replace(/^\/catat\s*/i, '').trim();
+    if (lowerText.startsWith('/catat') || lowerText.startsWith('/note')) {
+      const noteBody = rawText.replace(/^\/(catat|note)\s*/i, '').trim();
       if (!noteBody) {
         updateUserState(user.jid, 'AWAITING_CUSTOM_NOTE', null);
         await reply({
@@ -752,26 +840,39 @@ Pertahankan streak Anda dengan menjawab kuis harian! Ketik */quiz* (atau *2*) se
       return;
     }
 
-    // Shortcut 4 -> /profil
+    // Shortcut 4 -> /profil atau /profile
     if (lowerText === '/profil' || lowerText === 'profil' || lowerText === '/profile' || lowerText === 'profile' || lowerText === '4') {
+      const isEnglishUser = user.preferred_language === 'en';
       const trackName = FOCUS_TRACKS[Object.keys(FOCUS_TRACKS).find(k => FOCUS_TRACKS[k].key === user.focus_track)]?.label || user.focus_track;
       const prefName = REMINDER_PREFERENCES[Object.keys(REMINDER_PREFERENCES).find(k => REMINDER_PREFERENCES[k].key === user.reminder_preference)]?.label || user.reminder_preference;
+      const langLabel = user.preferred_language === 'en' ? 'English 🇬🇧' : 'Bahasa Indonesia 🇮🇩';
 
-      const profileText = `👤 *PROFIL PENGGUNA*
+      const profileText = isEnglishUser
+        ? `👤 *USER PROFILE*
+• Name: *${user.display_name}*
+• Phone: *${user.phone_number}*
+• Language: *${langLabel}*
+• Focus Track: *${trackName}*
+• Notification: *${prefName}*
+• Streak: *🔥 ${user.streak_count || 0} Days*
+
+Type */lang id* to switch to Indonesian or */reset* to restart setup from scratch.${LOOPBACK_FOOTER}`
+        : `👤 *PROFIL PENGGUNA*
 • Nama: *${user.display_name}*
 • Nomor: *${user.phone_number}*
+• Bahasa: *${langLabel}*
 • Jalur Fokus: *${trackName}*
 • Jadwal Notifikasi: *${prefName}*
 • Streak: *🔥 ${user.streak_count || 0} Hari*
 
-Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_FOOTER}`;
+Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ulang preferensi dari awal.${LOOPBACK_FOOTER}`;
       await reply({ text: profileText });
       return;
     }
 
-    // Shortcut 5 -> /bantuan
+    // Shortcut 5 -> /bantuan atau /help
     if (lowerText === '/bantuan' || lowerText === '/help' || lowerText === 'bantuan' || lowerText === 'help' || lowerText === '5') {
-      await reply({ text: `${MESSAGES.HELP}${LOOPBACK_FOOTER}` });
+      await reply({ text: `${MESSAGES.HELP(user)}${LOOPBACK_FOOTER}` });
       return;
     }
 
@@ -1035,7 +1136,10 @@ _(Balas *1* untuk topik baru, atau *2* jika masih terkait)_`;
         }
       }
 
-      const answer = await answerGeneralTelcoQuestion(rawText, user.id, { contextTrack: user.focus_track });
+      const answer = await answerGeneralTelcoQuestion(rawText, user.id, {
+        contextTrack: user.focus_track,
+        preferredLanguage: user.preferred_language
+      });
       await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
       return;
     }

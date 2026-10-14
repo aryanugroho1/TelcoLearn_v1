@@ -17,6 +17,14 @@ export function initializeDatabase() {
 
   // 0. Pre-Migration: Pastikan kolom baru ada pada tabel lama sebelum indeks dibuat
   try {
+    const userInfo = db.prepare("PRAGMA table_info(users)").all();
+    const userCols = userInfo.map(col => col.name);
+    if (userCols.length > 0 && !userCols.includes('preferred_language')) {
+      db.exec("ALTER TABLE users ADD COLUMN preferred_language TEXT DEFAULT 'id';");
+    }
+  } catch (uErr) {}
+
+  try {
     const kbInfo = db.prepare("PRAGMA table_info(knowledge_base)").all();
     const kbCols = kbInfo.map(col => col.name);
     if (kbCols.length > 0) {

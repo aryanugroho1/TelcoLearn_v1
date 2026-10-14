@@ -161,6 +161,31 @@ export const REMINDER_PREFERENCES = {
 };
 
 export const MESSAGES = {
+  WELCOME_LANGUAGE: `👋 *Welcome to TelcoLearn! / Selamat datang di TelcoLearn!*
+AI Telecom Knowledge Companion & Protocol Diagnostic Engine (3GPP, O-RAN & Multi-Vendor).
+
+🌐 *Please choose your language / Silakan pilih bahasa:*
+1️⃣ *Bahasa Indonesia* 🇮🇩
+2️⃣ *English* 🇬🇧
+
+_(Ketik *1* atau *2* / Reply with *1* or *2*)_`,
+
+  WELCOME_TRACK_ID: `🎯 *Pilih Fokus Belajar Anda:*
+1️⃣ 4G/5G Protocol QA 📡
+2️⃣ Field & Drive Test 🚙
+3️⃣ ML & Data Analytics Telco 🤖
+4️⃣ Log Analysis & Troubleshooting 📋
+
+_(Ketik angka 1, 2, 3, atau 4, atau langsung tanyakan konsep jaringan apa saja ke sini!)_`,
+
+  WELCOME_TRACK_EN: `🎯 *Select Your Primary Study Track:*
+1️⃣ 4G/5G Protocol QA 📡
+2️⃣ Field & Drive Test 🚙
+3️⃣ ML & Data Analytics Telco 🤖
+4️⃣ Log Analysis & Troubleshooting 📋
+
+_(Reply with 1, 2, 3, or 4, or feel free to ask any cellular/network question directly!)_`,
+
   WELCOME_ONBOARDING: `👋 *Selamat datang di TelcoLearn Bot!*
 Platform micro-learning & asisten cerdas AI untuk seluruh bidang Telekomunikasi (RAN, Core Network, Protokol 4G/5G, Field RF, O-RAN, hingga AI Telco).
 
@@ -172,6 +197,26 @@ Mari atur preferensi belajar harian Anda:
 4️⃣ Log Analysis & Troubleshooting 📋
 
 _(Ketik angka 1, 2, 3, atau 4, atau langsung tanyakan konsep jaringan apa saja ke sini!)_`,
+
+  ONBOARDING_ACK_ID: (trackLabel) => `🎯 *Fokus Belajar Anda Diatur ke:* *${trackLabel}*
+
+Pembahasan dan materi Anda sekarang difokuskan ke *${trackLabel}*.
+
+Silakan langsung:
+• Bertanya bebas seputar topik ini (misal: call flow, RSRP/SINR, log modem, dll.)
+• Ketik *1* (atau */belajar*) untuk membaca modul harian
+• Ketik *2* (atau */quiz*) untuk latihan kuis interaktif
+• Ketik *0* (atau */menu*) untuk membuka menu navigasi utama`,
+
+  ONBOARDING_ACK_EN: (trackLabel) => `🎯 *Your Study Track is set to:* *${trackLabel}*
+
+Your topics and lessons are now focused on *${trackLabel}*.
+
+You can now:
+• Ask any technical questions freely (e.g., call flow, RSRP/SINR, modem logs, etc.)
+• Type *1* (or */learn*) to read daily micro-learning modules
+• Type *2* (or */quiz*) for 60-second quiz challenges
+• Type *0* (or */menu*) to open the main navigation menu`,
 
   ONBOARDING_TIME_PROMPT: (trackLabel) => `Pilihan dicatat: *${trackLabel}*
 
@@ -195,10 +240,15 @@ Perintah cepat yang dapat Anda gunakan:
 
 Atau *tempelkan cuplikan log QXDM/OTA* kapan saja untuk analisis RCA instan! 🚀`,
 
-  MAIN_MENU: (user) => `📱 *TELCOLEARN MAIN MENU*
-Halo, *${user.display_name || 'Pelajar Telco'}*!
-🎯 Track: _${user.focus_track || 'protocol_qa'}_
-🔥 Streak: *${user.streak_count || 0} Hari*
+  MAIN_MENU: (user) => {
+    if (user?.preferred_language === 'en') {
+      return MESSAGES.MAIN_MENU_EN(user);
+    }
+    return `📱 *TELCOLEARN MAIN MENU*
+Halo, *${user?.display_name || 'Pelajar Telco'}*!
+🎯 Track: _${user?.focus_track || 'protocol_qa'}_
+🔥 Streak: *${user?.streak_count || 0} Hari*
+🌐 Bahasa: *Bahasa Indonesia* 🇮🇩
 
 Pilih opsi di bawah _(cukup ketik angka 1 - 6 atau perintahnya)_:
 1️⃣ */belajar* - Baca materi micro-dose berikutnya
@@ -210,10 +260,36 @@ Pilih opsi di bawah _(cukup ketik angka 1 - 6 atau perintahnya)_:
 
 💡 *Tips Pro:*
 • Ketik */simulasi* untuk melihat grafik simulasi RF & diagram visual dari topik yang baru saja dibahas!
+• Ketik */lang en* kapan saja untuk beralih ke Bahasa Inggris.
 • Langsung *forward/paste cuplikan error log QXDM/PCAP* atau tanyakan konsep radio apa saja ke sini!
-_(Ketik *0* kapan saja untuk kembali ke menu ini)_`,
+_(Ketik *0* kapan saja untuk kembali ke menu ini)_`;
+  },
 
-  HELP: `📖 *PANDUAN PENGGUNAAN TELCOLEARN*
+  MAIN_MENU_EN: (user) => `📱 *TELCOLEARN MAIN MENU*
+Hello, *${user?.display_name || 'Telco Learner'}*!
+🎯 Track: _${user?.focus_track || 'protocol_qa'}_
+🔥 Streak: *${user?.streak_count || 0} Days*
+🌐 Language: *English* 🇬🇧
+
+Choose an option below _(reply 1 - 6 or type the command)_:
+1️⃣ */learn* - Read next micro-dose module
+2️⃣ */quiz* - 60-second quiz challenge (boost streak!)
+3️⃣ */streak* - Consistency & learning stats
+4️⃣ */profile* - Track & notification settings
+5️⃣ */help* - Usage guide & command reference
+6️⃣ */feedback* - Send suggestions & feedback
+
+💡 *Pro Tips:*
+• Type */sim* to render RF simulation plots & visual diagrams!
+• Type */lang id* anytime to switch to Bahasa Indonesia.
+• Directly *forward/paste QXDM/PCAP raw logs* or ask any cellular/network question!
+_(Type *0* anytime to return to this menu)_`,
+
+  HELP: (user) => {
+    if (user?.preferred_language === 'en') {
+      return MESSAGES.HELP_EN;
+    }
+    return `📖 *PANDUAN PENGGUNAAN TELCOLEARN*
 
 TelcoLearn adalah platform micro-learning & asisten AI komprehensif untuk seluruh bidang Telekomunikasi (RAN, Core Network, Transmisi, Protokol 3GPP, hingga AI & Otomasi Jaringan).
 
@@ -222,6 +298,7 @@ TelcoLearn adalah platform micro-learning & asisten AI komprehensif untuk seluru
 • */belajar* - Mengirim materi micro-learning 3 menit
 • */quiz* - Membuka kuis pilihan ganda
 • */simulasi* - Membuat grafik simulasi RF / diagram visual kasus yang dibahas
+• */lang [en/id]* - Mengganti bahasa bot (English / Bahasa Indonesia)
 • */masukan [isi]* - Kirim saran / masukan untuk fitur baru & materi bot
 • */batal* - Membatalkan sesi kuis atau pencatatan
 • */streak* - Menampilkan rekor konsistensi belajar
@@ -242,7 +319,39 @@ atau
 Bot akan otomatis mendeteksi pola log dan menyajikan Root Cause Analysis (RCA), dampak pada modem UE, serta langkah pengujian di laboratorium!
 
 ☕ *Dukung Pengembangan TelcoLearn:*
-Untuk support bisa ke https://saweria.co/TelcoLearn`,
+Untuk support bisa ke https://saweria.co/TelcoLearn`;
+  },
+
+  HELP_EN: `📖 *TELCOLEARN USER GUIDE*
+
+TelcoLearn is a micro-learning platform & AI technical companion for Telecom & Networking (RAN, Core Network, 3GPP Protocols, O-RAN, and AI Analytics).
+
+*Command Reference:*
+• */menu* - Interactive navigation menu
+• */learn* or */belajar* - Read 3-minute micro-learning module
+• */quiz* - Multiple-choice cognitive quiz
+• */sim* or */simulasi* - Render RF simulation graphs / architecture diagrams
+• */lang [en/id]* - Switch bot language (English / Bahasa Indonesia)
+• */feedback [text]* - Send ideas / feature suggestions
+• */cancel* or */batal* - Cancel quiz or note taking
+• */streak* - Display study consistency & metrics
+• */track [1/2/3/4]* - Switch study track (Protocol QA, Drive Test, ML, Log Analysis)
+• */schedule [1/2/3]* - Configure daily notification times
+• */note [text]* - Save technical notes to database
+• */notes* - List your personal saved notes
+• */profile* - View account info & preferences
+• */clear* - Clear conversation context / start fresh topic
+• */reset* - Restart onboarding setup from scratch
+
+*AI Diagnostics (Gemini 3 Flash):*
+Simply paste radio log snippets such as:
+\`\`\`RRCConnectionReject waitTime: 16\`\`\`
+or
+\`\`\`5GMM cause = 11 (PLMN not allowed)\`\`\`
+The bot will automatically perform Root Cause Analysis (RCA), explain modem behavior, and provide laboratory verification steps!
+
+☕ *Support TelcoLearn Development:*
+Support us at https://saweria.co/TelcoLearn`,
 
   NO_MORE_MODULES: `🎉 *Luar Biasa!*
 Anda telah menyelesaikan seluruh modul kurikulum yang tersedia pada track ini. Nantikan modul lanjutan berikutnya atau ketik */quiz* untuk mengulang review soal!`,

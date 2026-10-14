@@ -5,11 +5,12 @@ CREATE TABLE IF NOT EXISTS users (
     phone_number TEXT NOT NULL,                -- Nomor murni: "6281234567890"
     display_name TEXT DEFAULT 'Pelajar Telco',
     focus_track TEXT DEFAULT 'protocol_qa',     -- 'protocol_qa', 'drive_test', 'ml_telco'
+    preferred_language TEXT DEFAULT 'id',       -- 'id' (Bahasa Indonesia) or 'en' (English)
     reminder_preference TEXT DEFAULT 'all',     -- 'morning', 'afternoon', 'night', 'all', 'off'
     custom_morning_time TEXT DEFAULT '07:30',   -- Format HH:MM (WIB)
     custom_afternoon_time TEXT DEFAULT '12:30', -- Format HH:MM (WIB)
     custom_night_time TEXT DEFAULT '20:30',     -- Format HH:MM (WIB)
-    current_state TEXT DEFAULT 'IDLE',          -- 'IDLE', 'AWAITING_QUIZ_ANSWER', 'AWAITING_CUSTOM_NOTE', 'ONBOARDING_TRACK', 'ONBOARDING_REMINDER'
+    current_state TEXT DEFAULT 'IDLE',          -- 'IDLE', 'ONBOARDING_LANG', 'ONBOARDING_TRACK', 'ONBOARDING_REMINDER', 'AWAITING_QUIZ_ANSWER', 'AWAITING_CUSTOM_NOTE'
     state_payload TEXT,                         -- JSON string data: e.g. {"active_quiz_id": 1}
     streak_count INTEGER DEFAULT 0,
     last_active_date TEXT,                      -- Format YYYY-MM-DD
