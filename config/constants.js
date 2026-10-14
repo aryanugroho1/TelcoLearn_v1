@@ -162,16 +162,16 @@ export const REMINDER_PREFERENCES = {
 
 export const MESSAGES = {
   WELCOME_ONBOARDING: `👋 *Selamat datang di TelcoLearn Bot!*
-Platform micro-learning 4G/5G Radio Protocol & Machine Learning untuk Device Testing.
+Platform micro-learning & asisten cerdas AI untuk seluruh bidang Telekomunikasi (RAN, Core Network, Protokol 4G/5G, Field RF, O-RAN, hingga AI Telco).
 
 Mari atur preferensi belajar harian Anda:
 🎯 *Fokus utama Anda saat ini?*
-1️⃣ 4G/5G Protocol QA
-2️⃣ Field & Drive Test
-3️⃣ ML Telco Testing
-4️⃣ Log Analysis
+1️⃣ 4G/5G Protocol QA 📡
+2️⃣ Field & Drive Test 🚙
+3️⃣ ML & Data Analytics Telco 🤖
+4️⃣ Log Analysis & Troubleshooting 📋
 
-_(Ketik angka 1, 2, 3, atau 4)_`,
+_(Ketik angka 1, 2, 3, atau 4, atau langsung tanyakan konsep jaringan apa saja ke sini!)_`,
 
   ONBOARDING_TIME_PROMPT: (trackLabel) => `Pilihan dicatat: *${trackLabel}*
 
@@ -215,7 +215,7 @@ _(Ketik *0* kapan saja untuk kembali ke menu ini)_`,
 
   HELP: `📖 *PANDUAN PENGGUNAAN TELCOLEARN*
 
-TelcoLearn adalah bot pendamping pembelajaran 3GPP & diagnosis protokol radio.
+TelcoLearn adalah platform micro-learning & asisten AI komprehensif untuk seluruh bidang Telekomunikasi (RAN, Core Network, Transmisi, Protokol 3GPP, hingga AI & Otomasi Jaringan).
 
 *Daftar Perintah:*
 • */menu* - Membuka menu interaktif
@@ -225,12 +225,13 @@ TelcoLearn adalah bot pendamping pembelajaran 3GPP & diagnosis protokol radio.
 • */masukan [isi]* - Kirim saran / masukan untuk fitur baru & materi bot
 • */batal* - Membatalkan sesi kuis atau pencatatan
 • */streak* - Menampilkan rekor konsistensi belajar
-• */track [1/2/3]* - Mengganti jalur fokus materi (QA, Drive Test, ML)
+• */track [1/2/3/4]* - Mengganti jalur fokus materi (QA, Drive Test, ML, Log Analysis)
 • */jadwal [1/2/3]* - Mengatur jadwal notifikasi harian
 • */catat [isi]* - Menyimpan catatan teknis ke database
 • */notes* - Melihat daftar catatan pribadi
 • */profil* - Melihat informasi akun & preferensi
-• */clear* - Membersihkan memori percakapan untuk memulai topik baru
+• */topikbaru* - Membersihkan riwayat percakapan untuk memulai topik baru
+• */clear* - Shortcut reset riwayat percakapan
 • */reset* - Mengatur ulang profil belajar dari awal
 
 *Diagnostik AI (Gemini 3 Flash):*
@@ -259,7 +260,7 @@ Saya dapat membantu Anda seputar:
 📊 *Optimasi RAN & KPI Vendor* (Nokia, Ericsson, Huawei, ZTE - Packet Loss, Drop Rate)
 🚙 *Field & Drive Testing* (RF KPIs, RSRP, SINR, Troubleshooting)
 📋 *Modem Log Analysis* (QXDM, PCAP, Signaling Traces)
-🤖 *ML untuk Device Testing*
+🤖 *AI & Data Analytics Telekomunikasi*
 
 Silakan ajukan pertanyaan atau kirimkan potongan log seputar topik di atas! 🚀`,
 
@@ -273,7 +274,7 @@ I support inquiries regarding:
 📊 *RAN Optimization & Vendor KPIs* (Nokia, Ericsson, Huawei, ZTE - Packet Loss, Drop Rate)
 🚙 *Field & Drive Testing* (RF KPIs, RSRP, SINR, Coverage)
 📋 *Modem Log Analysis* (QXDM, PCAP, Signaling Traces)
-🤖 *ML for Device Testing*
+🤖 *AI & Data Analytics for Telecommunications*
 
 Please ask a question related to cellular protocols, networking, vendor KPIs, or telco testing! 🚀`
 };
