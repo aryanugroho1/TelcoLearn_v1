@@ -25,7 +25,7 @@ if (!fs.existsSync(dbDir)) {
 }
 
 import { DatabaseSync } from 'node:sqlite';
-import { getPgPool } from './postgres.js';
+import { getPgPool } from '../services/postgres.js';
 
 let dbInstance = null;
 

@@ -12,7 +12,7 @@
 
 import crypto from 'crypto';
 import { getDb } from '../database/db.js';
-import { getPgPool, isPostgresConnected } from '../database/postgres.js';
+import { getPgPool, isPostgresConnected } from './postgres.js';
 
 export { getPgPool, isPostgresConnected };
 

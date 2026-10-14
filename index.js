@@ -28,6 +28,21 @@ import { getStoredMessage, saveMessageToStore } from './services/antiBanService.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Self-Healing: Jika volume persistent storage Coolify di-mount menimpa /app/database,
+// pastikan file postgres.js tetap ada di folder database volume tersebut
+try {
+  const dbDir = path.join(__dirname, 'database');
+  const sourcePostgres = path.join(__dirname, 'services', 'postgres.js');
+  const targetPostgres = path.join(dbDir, 'postgres.js');
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  if (!fs.existsSync(targetPostgres) && fs.existsSync(sourcePostgres)) {
+    fs.copyFileSync(sourcePostgres, targetPostgres);
+    console.log('🔄 [Self-Healing] Berhasil menyalin postgres.js ke volume persistent database.');
+  }
+} catch (e) {}
+
 // Inisialisasi basis data SQLite saat startup
 initializeDatabase();
 
