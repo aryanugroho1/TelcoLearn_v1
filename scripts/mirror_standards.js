@@ -221,6 +221,123 @@ const ESSENTIAL_3GPP_SPECS = [
     category: '4g_lte',
     technology: '4g_lte',
     keywords: '4g architecture, 36.300, e-utran, epc, enodeb, s1-mme, s1-u, x2-c, x2-u, default bearer, dedicated bearer, qci'
+  },
+
+  // 5G NR Layer 1 Measurements & Channel Coding
+  {
+    rel: 'Rel-17',
+    series: '38_series',
+    spec: '38215',
+    ts: 'TS 38.215',
+    title: '5G NR Physical Layer Measurements (SS-RSRP, SS-RSRQ, SS-SINR, CSI-RSRP, CQI)',
+    category: '5g_nr',
+    technology: '5g_nr',
+    keywords: 'rsrp, rsrq, sinr, 38.215, ss-rsrp, ss-rsrq, ss-sinr, csi-rsrp, csi-rsrq, csi-sinr, physical layer measurements, radio quality, coverage, interference',
+    extracts: [
+      {
+        subKey: 'rsrp_rsrq_sinr',
+        title: '3GPP TS 38.215 - 5G NR Radio Measurements Definitions (SS-RSRP, SS-RSRQ, SS-SINR)',
+        keywords: 'ss-rsrp, ss-rsrq, ss-sinr, csi-rsrp, csi-rsrq, csi-sinr, measurement definition, radio quality, signal strength',
+        startPattern: '## 5.1.1 SS-RSRP',
+        endPattern: '## 5.2 gNB measurements'
+      }
+    ]
+  },
+  {
+    rel: 'Rel-17',
+    series: '38_series',
+    spec: '38212',
+    ts: 'TS 38.212',
+    title: '5G NR Multiplexing and Channel Coding (Polar Codes, LDPC, CRC, DCI Formats, UCI)',
+    category: '5g_nr',
+    technology: '5g_nr',
+    keywords: 'channel coding, 38.212, polar code, ldpc, crc, dci format, dci 0_0, dci 0_1, dci 1_0, dci 1_1, uci, multiplexing, harq-ack'
+  },
+
+  // 5G NR Layer 2 Protocols (RLC & PDCP)
+  {
+    rel: 'Rel-17',
+    series: '38_series',
+    spec: '38322',
+    ts: 'TS 38.322',
+    title: '5G NR Radio Link Control (RLC) Protocol Specification (AM, UM, TM Modes & Timers)',
+    category: '5g_nr',
+    technology: '5g_nr',
+    keywords: 'rlc, 38.322, acknowledged mode, unacknowledged mode, transparent mode, am, um, tm, poll retransmit, t-pollretransmit, t-reassembly, t-statusprohibit, status pdu',
+    extracts: [
+      {
+        subKey: 'rlc_procedures',
+        title: '3GPP TS 38.322 - 5G NR RLC Procedures & Timers (t-PollRetransmit, t-Reassembly)',
+        keywords: 'rlc timers, t-pollretransmit, t-reassembly, t-statusprohibit, poll retransmit, status report, am mode, sn length',
+        startPattern: '## 5.2.2 Acknowledged Mode (AM) RLC entity',
+        endPattern: '## 6 Protocol data units, formats and parameters'
+      }
+    ]
+  },
+  {
+    rel: 'Rel-17',
+    series: '38_series',
+    spec: '38323',
+    ts: 'TS 38.323',
+    title: '5G NR Packet Data Convergence Protocol (PDCP) Specification (Header Compression, Security, Timers)',
+    category: '5g_nr',
+    technology: '5g_nr',
+    keywords: 'pdcp, 38.323, rohc, header compression, ciphering, integrity protection, discardtimer, t-reordering, count, sequence number, out of order delivery'
+  },
+
+  // 5G NR RF & Base Station Specifications
+  {
+    rel: 'Rel-18',
+    series: '38_series',
+    spec: '38104',
+    ts: 'TS 38.104',
+    title: '5G NR Base Station (BS) Radio Transmission and Reception (Bands FR1/FR2, EVM, ACLR, Power)',
+    category: '5g_nr',
+    technology: '5g_nr',
+    keywords: 'rf specs, 38.104, base station rf, fr1, fr2, operating bands, n1, n3, n28, n77, n78, evm, aclr, conducted power, oob emission, spectrum emission mask'
+  },
+
+  // NG-RAN Inter-gNB & Split Interfaces (XnAP & F1AP)
+  {
+    rel: 'Rel-17',
+    series: '38_series',
+    spec: '38423',
+    ts: 'TS 38.423',
+    title: 'NG-RAN Xn Application Protocol (XnAP) (gNodeB to gNodeB Signaling & Handover)',
+    category: '5g_nr',
+    technology: '5g_nr',
+    keywords: 'xnap, 38.423, xn interface, xn handover, sn status transfer, retrieve ue context, dual connectivity, secondary node addition, xn setup'
+  },
+  {
+    rel: 'Rel-17',
+    series: '38_series',
+    spec: '38473',
+    ts: 'TS 38.473',
+    title: 'NG-RAN F1 Application Protocol (F1AP) (gNodeB CU to DU Interface Signaling)',
+    category: '5g_nr',
+    technology: '5g_nr',
+    keywords: 'f1ap, 38.473, f1-c, cu-du split, gnb-cu, gnb-du, ue context setup, f1 setup, rrc transfer, initial ul rrc message, bearer context'
+  },
+
+  // 4G LTE Core & NAS
+  {
+    rel: 'Rel-16',
+    series: '24_series',
+    spec: '24301',
+    ts: 'TS 24.301',
+    title: '4G LTE Non-Access-Stratum (NAS) Protocol for EPS (EMM & ESM Procedures and Cause Codes)',
+    category: '4g_lte',
+    technology: '4g_lte',
+    keywords: '4g nas, 24.301, emm cause, esm cause, attach reject, pdn connectivity reject, tau, tracking area update, eps bearer, mme',
+    extracts: [
+      {
+        subKey: 'cause_codes',
+        title: '3GPP TS 24.301 - 4G LTE NAS Cause Values (EMM & ESM Cause Codes)',
+        keywords: 'emm cause, esm cause, cause #7, cause #8, cause #11, cause #12, cause #13, cause #14, cause #15, cause #19, cause #27, cause #33',
+        startPattern: '## Annex A (informative): Cause values for EPS mobility management',
+        endPattern: '## Annex C (normative)'
+      }
+    ]
   }
 ];
 
