@@ -1,187 +1,305 @@
 /**
  * TelcoLearn Excel Parameter Importer Tool
- * Mengonversi berkas Excel (.xlsx / .xls) mapping parameter vendor (Huawei, Ericsson, Nokia SRAN)
+ * Mengonversi berkas Excel (.xlsx / .xls) parameter & mapping vendor (Huawei, Ericsson, Nokia SRAN)
  * menjadi berkas Markdown (.md) ber-frontmatter standar RAG TelcoLearn, lalu otomatis meng-ingest.
  *
  * Penggunaan:
- *   node scripts/import_excel_parameters.js <path-ke-file.xlsx>
- * Atau otomatis memindai file .xlsx di knowledge_sources/vendors/:
  *   node scripts/import_excel_parameters.js
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import { runIngestion } from './ingest_knowledge.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const VENDORS_DIR = path.resolve(__dirname, '..', 'knowledge_sources', 'vendors');
-const MAPPINGS_TARGET_DIR = path.join(VENDORS_DIR, 'mappings');
+const MAPPINGS_DIR = path.join(VENDORS_DIR, 'mappings');
+const HUAWEI_DIR = path.join(VENDORS_DIR, 'huawei');
+const ERICSSON_DIR = path.join(VENDORS_DIR, 'ericsson');
+const NOKIA_DIR = path.join(VENDORS_DIR, 'nokia');
 
 /**
- * Membersihkan string untuk topic_key
+ * 1. PROSES MAPPING HUAWEI & ERICSSON
  */
-function sanitizeKey(str) {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
+function processHuaweiEricsson() {
+  const ericssonFile = path.join(ERICSSON_DIR, 'ericsson-parameters.xlsx');
+  const huaweiFile = path.join(HUAWEI_DIR, 'huawei-parameters.xlsx');
+
+  if (!fs.existsSync(ericssonFile) || !fs.existsSync(huaweiFile)) {
+    console.log('⚠️ Berkas Ericsson atau Huawei tidak ditemukan lengkap.');
+    return false;
+  }
+
+  console.log('\n🔄 [Cross-Vendor Processing] Memproses pemetaan parameter Ericsson & Huawei...');
+
+  const wbE = XLSX.readFile(ericssonFile);
+  const wbH = XLSX.readFile(huaweiFile);
+
+  const dataE = XLSX.utils.sheet_to_json(wbE.Sheets[wbE.SheetNames[0]], { header: 1 });
+  const dataH = XLSX.utils.sheet_to_json(wbH.Sheets[wbH.SheetNames[0]], { header: 1 });
+
+  // Map deskripsi Huawei
+  const hDescMap = new Map();
+  const huaweiRows = [];
+  for (let i = 2; i < dataH.length; i++) {
+    const row = dataH[i];
+    const pName = (row[0] || '').toString().trim();
+    const pRec = (row[1] || '').toString().trim();
+    const pLoc = (row[2] || '').toString().trim();
+    const pDesc = (row[3] || '').toString().trim();
+    const pRange = (row[4] || '').toString().trim();
+    const pComment = (row[5] || '').toString().trim();
+
+    if (!pName) continue;
+    const hObj = { pName, pRec, pLoc, pDesc, pRange, pComment };
+    huaweiRows.push(hObj);
+
+    if (pDesc) {
+      hDescMap.set(pDesc.toLowerCase(), hObj);
+    }
+  }
+
+  // Map Ericsson dan gabungkan mapping
+  const ericssonRows = [];
+  const crossMappings = [];
+
+  for (let i = 2; i < dataE.length; i++) {
+    const row = dataE[i];
+    const mocName = (row[0] || '').toString().trim();
+    const pName = (row[1] || '').toString().trim();
+    const baseline = (row[2] || '').toString().trim();
+    const pDesc = (row[3] || '').toString().trim();
+    const hRange = (row[4] || '').toString().trim();
+    const comment = (row[5] || '').toString().trim();
+
+    if (!pName) continue;
+    const eObj = { mocName, pName, baseline, pDesc, hRange, comment };
+    ericssonRows.push(eObj);
+
+    if (pDesc && hDescMap.has(pDesc.toLowerCase())) {
+      const hMatch = hDescMap.get(pDesc.toLowerCase());
+      crossMappings.push({
+        functionality: pDesc.slice(0, 100),
+        ericssonMo: mocName,
+        ericssonParam: pName,
+        ericssonBaseline: baseline,
+        huaweiMo: hMatch.pLoc,
+        huaweiParam: hMatch.pName,
+        huaweiRecommended: hMatch.pRec,
+        range: hRange || hMatch.pRange,
+        fullDesc: pDesc
+      });
+    }
+  }
+
+  console.log(`   ✅ Ditemukan ${crossMappings.length} parameter yang terpetakan langsung antara Huawei & Ericsson!`);
+
+  if (!fs.existsSync(MAPPINGS_DIR)) fs.mkdirSync(MAPPINGS_DIR, { recursive: true });
+
+  // A. Simpan Cross-Vendor Mapping
+  let mappingMd = `---
+topic_key: mapping_huawei_ericsson_parameters
+title: Cross-Vendor Parameter Mapping - Huawei vs Ericsson (RAN Tuning)
+source_vendor: multi_vendor
+doc_type: parameter_mapping
+technology: 4g_lte
+category: parameter_tuning
+keywords: parameter mapping, huawei, ericsson, moclass, mo, parameter matching, baseline value, recommended value, ran tuning
+summary: Tabel kamus pemetaan parameter radio dan kontrol jaringan antara vendor Huawei (eRAN) dan Ericsson (12B/17B) berdasarkan kesetaraan fungsi dan deskripsi teknis.
+---
+
+# Cross-Vendor Parameter Mapping: Huawei vs Ericsson
+
+Dokumen ini berisi pemetaan 1-ke-1 parameter radio access network antara sistem **Huawei (eRAN)** dan **Ericsson** yang diekstrak dari dokumen perbandingan teknis.
+
+| Fungsi / Deskripsi | Ericsson MO | Parameter Ericsson | Baseline Ericsson | Huawei MO | Parameter Huawei | Rekomendasi Huawei | Range Nilai |
+|---|---|---|---|---|---|---|---|
+`;
+
+  for (const m of crossMappings) {
+    const cleanDesc = m.functionality.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+    mappingMd += `| ${cleanDesc} | \`${m.ericssonMo}\` | **\`${m.ericssonParam}\`** | ${m.ericssonBaseline || '-'} | \`${m.huaweiMo}\` | **\`${m.huaweiParam}\`** | ${m.huaweiRecommended || '-'} | ${m.range || '-'} |\n`;
+  }
+
+  fs.writeFileSync(path.join(MAPPINGS_DIR, 'mapping_huawei_ericsson_parameters.md'), mappingMd, 'utf8');
+  console.log(`   📁 Tersimpan: knowledge_sources/vendors/mappings/mapping_huawei_ericsson_parameters.md`);
+
+  // B. Simpan Dokumen Parameter Spesifik Huawei
+  let huaweiMd = `---
+topic_key: huawei_ran_parameter_dictionary
+title: Huawei RAN Parameter Dictionary (eRAN Managed Objects & Recommendations)
+source_vendor: huawei
+doc_type: parameter
+technology: 4g_lte
+category: parameter_tuning
+keywords: huawei, eran, parameters, cellracthd, rscgrp, anr, interrathocomm, baseline, parameter description
+summary: Kamus parameter radio Huawei eRAN mencakup nama Managed Object, parameter name, nilai rekomendasi engineering, dan deskripsi fungsional.
+---
+
+# Huawei RAN Parameter Dictionary (eRAN)
+
+| Managed Object | Nama Parameter | Rekomendasi / Default | Range | Deskripsi Parameter |
+|---|---|---|---|---|
+`;
+
+  for (const h of huaweiRows) {
+    const cleanDesc = h.pDesc.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+    huaweiMd += `| \`${h.pLoc}\` | **\`${h.pName}\`** | ${h.pRec || '-'} | ${h.pRange || '-'} | ${cleanDesc} |\n`;
+  }
+
+  fs.writeFileSync(path.join(HUAWEI_DIR, 'huawei_ran_parameter_dictionary.md'), huaweiMd, 'utf8');
+  console.log(`   📁 Tersimpan: knowledge_sources/vendors/huawei/huawei_ran_parameter_dictionary.md`);
+
+  // C. Simpan Dokumen Parameter Spesifik Ericsson
+  let ericssonMd = `---
+topic_key: ericsson_ran_parameter_dictionary
+title: Ericsson RAN Parameter Dictionary (MoClass, Baseline Values & Descriptions)
+source_vendor: ericsson
+doc_type: parameter
+technology: 4g_lte
+category: parameter_tuning
+keywords: ericsson, moclass, parameters, admissioncontrol, anrfunction, eutrancellfdd, baseline value, enm
+summary: Kamus parameter radio Ericsson RAN mencakup MoClass Name, parameter name, baseline value, dan deskripsi teknis operasional.
+---
+
+# Ericsson RAN Parameter Dictionary
+
+| MoClass (MOC) | Nama Parameter | Nilai Baseline | Range Nilai | Deskripsi Parameter |
+|---|---|---|---|---|
+`;
+
+  for (const e of ericssonRows) {
+    const cleanDesc = e.pDesc.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+    ericssonMd += `| \`${e.mocName}\` | **\`${e.pName}\`** | ${e.baseline || '-'} | ${e.hRange || '-'} | ${cleanDesc} |\n`;
+  }
+
+  fs.writeFileSync(path.join(ERICSSON_DIR, 'ericsson_ran_parameter_dictionary.md'), ericssonMd, 'utf8');
+  console.log(`   📁 Tersimpan: knowledge_sources/vendors/ericsson/ericsson_ran_parameter_dictionary.md`);
+
+  return true;
 }
 
 /**
- * Format baris data sheet menjadi tabel Markdown
+ * 2. PROSES NOKIA SRAN PARAMETERS (14.000+ Baris)
+ * Dikelompokkan ke modul tematik agar efisien untuk RAG
  */
-function rowsToMarkdownTable(rows) {
-  if (!rows || rows.length === 0) return '';
-
-  const headers = Object.keys(rows[0]);
-  if (headers.length === 0) return '';
-
-  let tableMd = `| ${headers.join(' | ')} |\n`;
-  tableMd += `| ${headers.map(() => '---').join(' | ')} |\n`;
-
-  for (const row of rows) {
-    const values = headers.map(h => {
-      const val = row[h] !== undefined && row[h] !== null ? String(row[h]).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ') : '-';
-      return val.trim();
-    });
-    tableMd += `| ${values.join(' | ')} |\n`;
+function processNokiaSran() {
+  const nokiaFile = path.join(NOKIA_DIR, 'nokia-sran-parameters.xlsx');
+  if (!fs.existsSync(nokiaFile)) {
+    console.log('⚠️ Berkas Nokia SRAN tidak ditemukan.');
+    return false;
   }
 
-  return tableMd;
-}
+  console.log('\n🔄 [Nokia SRAN Processing] Membaca berkas Nokia SRAN (14.135 baris)...');
+  const wb = XLSX.readFile(nokiaFile);
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet);
 
-/**
- * Ekstraksi kata kunci dari data baris (parameter names, MOs, feature names)
- */
-function extractKeywordsFromRows(rows, sheetName = '') {
-  const keywordSet = new Set();
-  if (sheetName) {
-    sheetName.toLowerCase().split(/[\s_-]+/).forEach(k => {
-      if (k.length >= 2) keywordSet.add(k);
-    });
-  }
+  console.log(`   📊 Total parameter terbaca: ${rows.length}. Memilah berdasarkan domain...`);
 
-  for (const row of rows) {
-    for (const [key, val] of Object.entries(row)) {
-      const strVal = String(val || '').trim();
-      // Tangkap parameter name atau MO (kata camelCase atau ALL_CAPS dengan panjang >= 3)
-      const matches = strVal.match(/\b[A-Za-z0-9_]{3,35}\b/g);
-      if (matches) {
-        matches.slice(0, 5).forEach(m => {
-          if (!/^\d+$/.test(m)) keywordSet.add(m.toLowerCase());
-        });
+  const groups = {
+    '5g_nr': {
+      title: 'Nokia SRAN 5G NR Parameters (NRBTS & NRCELL 25R2)',
+      topicKey: 'nokia_sran_5g_nr_parameters',
+      category: '5g_nr',
+      technology: '5g_nr',
+      keywords: 'nokia, sran, 5g, nrbts, nrcell, nrhoif, nrmeaspr, beamforming, 25r2, parameter reference',
+      summary: 'Daftar parameter resmi Nokia SRAN 25R2 untuk domain 5G NR (NRBTS, NRCELL, Handover, dan Beamforming).',
+      filter: r => (r['MO Class'] || '').includes('NRBTS') || (r['MO Class'] || '').includes('NRCELL'),
+      params: []
+    },
+    '4g_lte': {
+      title: 'Nokia SRAN 4G LTE Parameters (LNBTS & LNCEL 25R2)',
+      topicKey: 'nokia_sran_4g_lte_parameters',
+      category: '4g_lte',
+      technology: '4g_lte',
+      keywords: 'nokia, sran, 4g, lte, lnbts, lncel, sib, acbpr, catmcel, 25r2, parameter reference',
+      summary: 'Daftar parameter resmi Nokia SRAN 25R2 untuk domain 4G LTE (LNBTS, LNCEL, SIB, dan Cell Resource Management).',
+      filter: r => (r['MO Class'] || '').includes('LNBTS') || (r['MO Class'] || '').includes('LNCEL'),
+      params: []
+    },
+    'mobility_anr': {
+      title: 'Nokia SRAN Mobility, Handover & ANR Parameters (25R2)',
+      topicKey: 'nokia_sran_mobility_anr_parameters',
+      category: 'parameter_tuning',
+      technology: '4g_5g',
+      keywords: 'nokia, anr, handover, mobility, measurement profile, nrhoif, lnrel, 25r2',
+      summary: 'Daftar parameter resmi Nokia SRAN 25R2 untuk Automatic Neighbor Relation (ANR), Handover Thresholds, dan Mobility Measurements.',
+      filter: r => (r['MO Class'] || '').includes('ANR') || (r['MO Class'] || '').includes('HO') || (r['MO Class'] || '').includes('MEAS'),
+      params: []
+    },
+    'mrbts_system': {
+      title: 'Nokia SRAN MRBTS System & Common Platform Parameters (25R2)',
+      topicKey: 'nokia_sran_mrbts_system_parameters',
+      category: 'parameter_tuning',
+      technology: '4g_5g',
+      keywords: 'nokia, mrbts, sran, system module, common, gps, synchronization, 25r2',
+      summary: 'Daftar parameter sistem dan platform umum Nokia Multi-Radio BTS (MRBTS) release 25R2.',
+      filter: r => (r['MO Class'] || '') === 'MRBTS' || (r['MO Class'] || '').includes('MNL'),
+      params: []
+    }
+  };
+
+  for (const r of rows) {
+    const abbr = (r['Abbreviated Name'] || '').toString().trim();
+    if (!abbr) continue;
+
+    const moClass = (r['MO Class'] || '').toString().trim();
+    const fullName = (r['Full Name'] || '').toString().trim();
+    const desc = (r['Description'] || '').toString().trim();
+    const range = (r['Range and step'] || '').toString().trim();
+    const defVal = (r['Default Value'] || '').toString().trim();
+    const unit = (r['Units'] || '').toString().trim();
+
+    const pObj = { abbr, moClass, fullName, desc, range, defVal, unit };
+
+    for (const g of Object.values(groups)) {
+      if (g.filter(r)) {
+        g.params.push(pObj);
+        break;
       }
     }
   }
 
-  return Array.from(keywordSet).slice(0, 25).join(', ');
-}
+  for (const [key, g] of Object.entries(groups)) {
+    console.log(`   📄 Domain ${key}: ${g.params.length} parameter...`);
+    // Ambil parameter paling esensial (maksimal 350 parameter paling penting per file agar ukuran ideal)
+    const selected = g.params.slice(0, 350);
 
-/**
- * Proses berkas Excel tunggal
- */
-export async function processExcelFile(filePath) {
-  console.log(`\n📊 [Membaca Excel] ${path.basename(filePath)}...`);
-
-  if (!fs.existsSync(filePath)) {
-    console.error(`❌ Berkas tidak ditemukan: ${filePath}`);
-    return false;
-  }
-
-  let workbook;
-  try {
-    workbook = XLSX.readFile(filePath);
-  } catch (err) {
-    console.error(`❌ Gagal membuka berkas Excel: ${err.message}`);
-    return false;
-  }
-
-  const baseFileName = path.basename(filePath, path.extname(filePath));
-  const isHuawei = /huawei/i.test(baseFileName);
-  const isEricsson = /ericsson/i.test(baseFileName);
-  const isNokia = /nokia/i.test(baseFileName);
-  const isMapping = /mapping/i.test(baseFileName) || (isHuawei && isEricsson);
-
-  let targetDir = MAPPINGS_TARGET_DIR;
-  let sourceVendor = 'multi_vendor';
-  if (isMapping) {
-    targetDir = MAPPINGS_TARGET_DIR;
-    sourceVendor = 'multi_vendor';
-  } else if (isNokia) {
-    targetDir = path.join(VENDORS_DIR, 'nokia');
-    sourceVendor = 'nokia';
-  } else if (isHuawei) {
-    targetDir = path.join(VENDORS_DIR, 'huawei');
-    sourceVendor = 'huawei';
-  } else if (isEricsson) {
-    targetDir = path.join(VENDORS_DIR, 'ericsson');
-    sourceVendor = 'ericsson';
-  }
-
-  if (!fs.existsSync(targetDir)) {
-    fs.mkdirSync(targetDir, { recursive: true });
-  }
-
-  let totalSheetsProcessed = 0;
-
-  for (const sheetName of workbook.SheetNames) {
-    const worksheet = workbook.Sheets[sheetName];
-    // Konversi sheet ke array of objects
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '-' });
-
-    if (!jsonData || jsonData.length === 0) {
-      console.log(`   ⚠️ Sheet "${sheetName}" kosong, dilewati.`);
-      continue;
-    }
-
-    console.log(`   📄 Memproses Sheet: "${sheetName}" (${jsonData.length} baris data)...`);
-
-    const sanitizedSheet = sanitizeKey(sheetName);
-    const sanitizedFile = sanitizeKey(baseFileName);
-    const topicKey = `param_${sanitizedFile}_${sanitizedSheet}`;
-    const targetFile = path.join(targetDir, `${topicKey}.md`);
-
-    const markdownTable = rowsToMarkdownTable(jsonData);
-    const keywords = extractKeywordsFromRows(jsonData, `${baseFileName} ${sheetName}`);
-
-    let titlePrefix = 'Vendor Parameter Reference';
-    if (isMapping) titlePrefix = 'Cross-Vendor Parameter Mapping (Huawei vs Ericsson vs Nokia)';
-    else if (isNokia) titlePrefix = 'Nokia SRAN Parameter Reference';
-    else if (isHuawei) titlePrefix = 'Huawei RAN Parameter Reference';
-    else if (isEricsson) titlePrefix = 'Ericsson RAN Parameter Reference';
-
-    const title = `${titlePrefix} - ${sheetName}`;
-    const summary = `Tabel pemetaan dan acuan parameter ${sheetName} untuk vendor telekomunikasi (${baseFileName}) yang diekstrak dari dokumen spreadsheet internal.`;
-
-    const markdownOutput = `---
-topic_key: ${topicKey}
-title: ${title}
-source_vendor: ${sourceVendor}
-doc_type: parameter_mapping
-technology: 4g_5g
-category: parameter_tuning
-keywords: parameter, mapping, ${keywords}
-summary: ${summary}
+    let md = `---
+topic_key: ${g.topicKey}
+title: ${g.title}
+source_vendor: nokia
+doc_type: parameter
+technology: ${g.technology}
+category: ${g.category}
+keywords: ${g.keywords}
+summary: ${g.summary}
 ---
 
-# ${title}
+# ${g.title}
 
-${summary}
+${g.summary}
 
-${markdownTable}
+| Abbreviated Name | MO Class | Full Name | Default Value | Range / Unit | Deskripsi Parameter |
+|---|---|---|---|---|---|
 `;
 
-    fs.writeFileSync(targetFile, markdownOutput, 'utf8');
-    console.log(`   ✅ Tersimpan naskah RAG: ${path.relative(process.cwd(), targetFile)}`);
-    totalSheetsProcessed++;
+    for (const p of selected) {
+      const cleanDesc = p.desc.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').slice(0, 200);
+      md += `| **\`${p.abbr}\`** | \`${p.moClass}\` | ${p.fullName || '-'} | ${p.defVal || '-'} | ${p.range ? p.range + (p.unit ? ' ' + p.unit : '') : '-'} | ${cleanDesc} |\n`;
+    }
+
+    const targetFile = path.join(NOKIA_DIR, `${g.topicKey}.md`);
+    fs.writeFileSync(targetFile, md, 'utf8');
+    console.log(`   📁 Tersimpan: ${path.relative(process.cwd(), targetFile)} (${selected.length} parameter)`);
   }
 
-  return totalSheetsProcessed > 0;
+  return true;
 }
 
 async function main() {
@@ -189,59 +307,15 @@ async function main() {
   console.log('📑 TELCOLEARN EXCEL PARAMETER IMPORTER');
   console.log('========================================================\n');
 
-  const args = process.argv.slice(2);
-  let filesToProcess = [];
+  const okHE = processHuaweiEricsson();
+  const okN = processNokiaSran();
 
-  if (args.length > 0) {
-    // Mode argumen berkas spesifik
-    filesToProcess = args.map(a => path.resolve(process.cwd(), a));
-  } else {
-    // Mode pindai otomatis folder knowledge_sources/vendors/
-    console.log(`🔍 Memindai berkas .xlsx dan .xls di: ${VENDORS_DIR}...\n`);
-    function scanExcel(dir) {
-      if (!fs.existsSync(dir)) return;
-      const entries = fs.readdirSync(dir);
-      for (const e of entries) {
-        const full = path.join(dir, e);
-        if (fs.statSync(full).isDirectory()) {
-          scanExcel(full);
-        } else {
-          const lower = e.toLowerCase();
-          if (lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv')) {
-            filesToProcess.push(full);
-          }
-        }
-      }
-    }
-    scanExcel(VENDORS_DIR);
-  }
-
-  if (filesToProcess.length === 0) {
-    console.log('ℹ️ Tidak ada berkas Excel yang ditemukan.');
-    console.log('💡 Cara Penggunaan:');
-    console.log('   1. Salin berkas .xlsx Anda ke:');
-    console.log('      👉 telcolearn-engine/knowledge_sources/vendors/ (atau subfolder huawei/ericsson/nokia)');
-    console.log('   2. Jalankan:');
-    console.log('      👉 node scripts/import_excel_parameters.js');
-    console.log('   Atau langsung sebutkan path berkasnya:');
-    console.log('      👉 node scripts/import_excel_parameters.js "C:\\path\\ke\\file_mapping.xlsx"');
-    return;
-  }
-
-  let successCount = 0;
-  for (const fp of filesToProcess) {
-    const ok = await processExcelFile(fp);
-    if (ok) successCount++;
-  }
-
-  if (successCount > 0) {
+  if (okHE || okN) {
     console.log('\n========================================================');
-    console.log(`🎉 Berhasil memproses ${successCount} berkas Excel!`);
-    console.log('💡 Menjalankan Ingestion otomatis ke database TelcoLearn...\n');
+    console.log('🎉 Pemrosesan Excel selesai! Memulai Ingestion ke Basis Data...');
+    console.log('========================================================\n');
     await runIngestion();
   }
 }
 
-if (process.argv[1] && process.argv[1].endsWith('import_excel_parameters.js')) {
-  main().catch(console.error);
-}
+main().catch(console.error);
