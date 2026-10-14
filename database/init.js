@@ -15,6 +15,23 @@ export function initializeDatabase() {
   console.log('🔄 Menginisialisasi basis data SQLite TelcoLearn...');
   const db = getDb();
 
+  // 0. Pre-Migration: Pastikan kolom baru ada pada tabel lama sebelum indeks dibuat
+  try {
+    const kbInfo = db.prepare("PRAGMA table_info(knowledge_base)").all();
+    const kbCols = kbInfo.map(col => col.name);
+    if (kbCols.length > 0) {
+      if (!kbCols.includes('source_vendor')) {
+        db.exec("ALTER TABLE knowledge_base ADD COLUMN source_vendor TEXT DEFAULT '3gpp';");
+      }
+      if (!kbCols.includes('doc_type')) {
+        db.exec("ALTER TABLE knowledge_base ADD COLUMN doc_type TEXT DEFAULT 'general';");
+      }
+      if (!kbCols.includes('technology')) {
+        db.exec("ALTER TABLE knowledge_base ADD COLUMN technology TEXT DEFAULT '5g_nr';");
+      }
+    }
+  } catch (preErr) {}
+
   // 1. Jalankan schema.sql
   const schemaPath = path.join(__dirname, 'schema.sql');
   if (fs.existsSync(schemaPath)) {
@@ -80,6 +97,25 @@ export function initializeDatabase() {
     `);
   } catch (fbErr) {
     console.warn('ℹ️ Tabel user_feedbacks check:', fbErr.message);
+  }
+
+  // 6. Migrasi Kolom Metadata Vendor & Tipe Dokumen pada knowledge_base
+  try {
+    const kbInfo = db.prepare("PRAGMA table_info(knowledge_base)").all();
+    const kbCols = kbInfo.map(col => col.name);
+    if (!kbCols.includes('source_vendor')) {
+      db.exec("ALTER TABLE knowledge_base ADD COLUMN source_vendor TEXT DEFAULT '3gpp';");
+    }
+    if (!kbCols.includes('doc_type')) {
+      db.exec("ALTER TABLE knowledge_base ADD COLUMN doc_type TEXT DEFAULT 'general';");
+    }
+    if (!kbCols.includes('technology')) {
+      db.exec("ALTER TABLE knowledge_base ADD COLUMN technology TEXT DEFAULT '5g_nr';");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_kb_vendor ON knowledge_base(source_vendor, technology);");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_kb_doc_type ON knowledge_base(doc_type);");
+  } catch (kbMigErr) {
+    console.warn('ℹ️ Migrasi kolom knowledge_base metadata dilewati:', kbMigErr.message);
   }
 
   const moduleCount = db.prepare('SELECT COUNT(*) as count FROM modules').get().count;

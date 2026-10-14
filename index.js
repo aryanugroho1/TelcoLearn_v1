@@ -46,6 +46,14 @@ try {
 // Inisialisasi basis data SQLite saat startup
 initializeDatabase();
 
+// Auto-Ingest materi telekomunikasi baru dari knowledge_sources saat startup
+try {
+  const { runIngestion } = await import('./scripts/ingest_knowledge.js');
+  await runIngestion();
+} catch (ingestBootErr) {
+  console.warn('ℹ️ [Startup Ingest]:', ingestBootErr.message);
+}
+
 const authFolder = path.join(__dirname, 'auth_info_baileys');
 if (!fs.existsSync(authFolder)) {
   fs.mkdirSync(authFolder, { recursive: true });

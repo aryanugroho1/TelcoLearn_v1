@@ -113,20 +113,25 @@ CREATE TABLE IF NOT EXISTS llm_conversation_logs (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 8. KNOWLEDGE BASE REFERENSI SHARETECHNOTE (knowledge_base)
+-- 8. KNOWLEDGE BASE REFERENSI SHARETECHNOTE, 3GPP, O-RAN & VENDORS (knowledge_base)
 CREATE TABLE IF NOT EXISTS knowledge_base (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    topic_key TEXT NOT NULL UNIQUE,       -- 'lte_call_flow', 'ue_signal_acquisition', 'rach_rar', 'oran_ric'
+    topic_key TEXT NOT NULL UNIQUE,       -- 'lte_call_flow', '3gpp_rrc_timers', 'oran_e2ap'
     title TEXT NOT NULL,
     keywords TEXT NOT NULL,               -- comma-separated: 'call flow, attach, lte, initial attach, s1ap, rrc'
     category TEXT NOT NULL,               -- '4g_lte', '5g_nr', 'o_ran', 'protocol_qa'
+    source_vendor TEXT DEFAULT '3gpp',    -- '3gpp', 'o_ran', 'huawei', 'nokia', 'ericsson', 'zte'
+    doc_type TEXT DEFAULT 'general',      -- 'call_flow', 'parameter', 'kpi_formula', 'alarm_triage', 'architecture'
+    technology TEXT DEFAULT '5g_nr',      -- '5g_nr', '4g_lte', '5gc', 'o_ran'
     summary TEXT NOT NULL,
-    core_content TEXT NOT NULL,           -- Structured ShareTechNote deep technical reference content
+    core_content TEXT NOT NULL,           -- Structured technical reference content
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_kb_topic ON knowledge_base(topic_key);
 CREATE INDEX IF NOT EXISTS idx_kb_category ON knowledge_base(category);
+CREATE INDEX IF NOT EXISTS idx_kb_vendor ON knowledge_base(source_vendor, technology);
+CREATE INDEX IF NOT EXISTS idx_kb_doc_type ON knowledge_base(doc_type);
 
 -- 9. TABEL MASUKAN & SARAN PENGGUNA (user_feedbacks - STRICTLY CONFIDENTIAL & ANONYMOUS)
 CREATE TABLE IF NOT EXISTS user_feedbacks (

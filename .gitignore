@@ -1,6 +1,8 @@
-# Exclude ALL markdown files as explicitly requested
+# Exclude markdown files except knowledge_sources and root README
 *.md
 **/*.md
+!README.md
+!knowledge_sources/**/*.md
 
 # Dependencies
 node_modules/

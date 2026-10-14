@@ -515,23 +515,41 @@ export function searchKnowledgeBase(query) {
   let bestMatch = null;
   let highestScore = 0;
 
+  // Deteksi vendor atau domain yang disebut secara spesifik dalam kueri
+  const mentionsHuawei = /\b(huawei|u2020|mae|mml|camgtcfg|cellmlb|smartcare)\b/i.test(clean);
+  const mentionsZte = /\b(zte|elasticnet|netnumen|rancli)\b/i.test(clean);
+  const mentionsNokia = /\b(nokia|netact|airscale|uli)\b/i.test(clean);
+  const mentionsEricsson = /\b(ericsson|enm|mme|alex|cpi)\b/i.test(clean);
+  const mentions3gpp = /\b(3gpp|rrc|nas|call flow|ts\s*38|ts\s*24|ts\s*23|ts\s*36)\b/i.test(clean);
+  const mentionsOran = /\b(o-ran|oran|ric|near-rt|non-rt|xapp|rapp|e2|e2ap|e2sm|7\.2x)\b/i.test(clean);
+
   for (const topic of allTopics) {
     let score = 0;
-    const topicKey = topic.topic_key.toLowerCase();
-    const title = topic.title.toLowerCase();
+    const topicKey = (topic.topic_key || '').toLowerCase();
+    const title = (topic.title || '').toLowerCase();
     const keywords = (topic.keywords || '').toLowerCase().split(',').map(k => k.trim());
-    const content = topic.core_content.toLowerCase();
+    const content = (topic.core_content || '').toLowerCase();
+    const vendor = (topic.source_vendor || '').toLowerCase();
+    const tech = (topic.technology || '').toLowerCase();
 
-    // 1. Kecocokan frasa kunci langsung di kolom keywords
+    // 1. Kecocokan vendor/domain spesifik (Prioritaskan sumber yang tepat)
+    if (mentionsHuawei && vendor === 'huawei') score += 40;
+    if (mentionsZte && vendor === 'zte') score += 40;
+    if (mentionsNokia && vendor === 'nokia') score += 40;
+    if (mentionsEricsson && vendor === 'ericsson') score += 40;
+    if (mentions3gpp && (vendor === '3gpp' || tech === '5g_nr' || tech === '4g_lte')) score += 20;
+    if (mentionsOran && (vendor === 'o_ran' || tech === 'o_ran')) score += 40;
+
+    // 2. Kecocokan frasa kunci langsung di kolom keywords
     if (keywords.some(k => clean.includes(k) || k.includes(clean))) {
-      score += 30;
+      score += 35;
     }
 
-    // 2. Pembobotan kecocokan token
+    // 3. Pembobotan kecocokan token
     for (const token of tokens) {
-      if (topicKey.includes(token)) score += 15;
-      if (title.includes(token)) score += 8;
-      if (keywords.some(k => k.includes(token))) score += 6;
+      if (topicKey.includes(token)) score += 18;
+      if (title.includes(token)) score += 10;
+      if (keywords.some(k => k.includes(token))) score += 8;
       if (content.includes(token)) score += 1;
     }
 
