@@ -2,12 +2,15 @@
 -- Mengkompilasi konsep mendalam, urutan call flow, radio channel, timers & IE
 -- Berdasarkan referensi terpercaya https://www.sharetechnote.com (4G LTE, 5G NR, O-RAN)
 
-INSERT OR REPLACE INTO knowledge_base (topic_key, title, keywords, category, summary, core_content)
+INSERT OR REPLACE INTO knowledge_base (topic_key, title, keywords, category, source_vendor, doc_type, technology, summary, core_content)
 VALUES
 (
     'lte_call_flow',
-    'LTE Call Flow & Initial Attach Procedure (3GPP Rel-8/14)',
-    'lte call flow, call flow lte, attach, initial attach, callflow lte, lte attach, s1ap, rrcconnectionsetup, default eps bearer, nas attach',
+    'LTE Call Flow & Initial Attach Procedure (ShareTechNote Reference)',
+    'lte call flow, call flow lte, attach, initial attach, callflow lte, lte attach, s1ap, rrcconnectionsetup, default eps bearer, nas attach, sharetechnote',
+    '4g_lte',
+    'sharetechnote',
+    'practical_guide',
     '4g_lte',
     'Alur lengkap prosedur Initial Attach LTE dari sinkronisasi sinyal, RACH, koneksi RRC, otentikasi NAS, hingga pendirian Default EPS Bearer.',
     'PROSEDUR LENGKAP LTE CALL FLOW & INITIAL ATTACH (SHARETECHNOTE REFERENCE):
@@ -48,7 +51,10 @@ VALUES
 (
     'ue_signal_acquisition',
     'UE Signal Acquisition & Cell Search Procedure (LTE & 5G NR)',
-    'ue signal acquisition, signal acquisition, cell search, akuisisi sinyal, pss, sss, pci, pbch, mib, sib1, ssb, initial access',
+    'ue signal acquisition, signal acquisition, cell search, akuisisi sinyal, pss, sss, pci, pbch, mib, sib1, ssb, initial access, sharetechnote',
+    '4g_lte',
+    'sharetechnote',
+    'practical_guide',
     '4g_lte',
     'Tahapan akuisisi sinyal UE dari deteksi PSS/SSS, kalkulasi Physical Cell ID (PCI), decoding PBCH/MIB, hingga pembacaan SIB1 dan evaluasi kriteria seleksi sel (S-Criteria).',
     'PROSEDUR UE SIGNAL ACQUISITION & CELL SEARCH (SHARETECHNOTE REFERENCE):
@@ -91,7 +97,10 @@ VALUES
 (
     'rach_rar',
     'RACH Procedure & Random Access Response (RAR / Msg2)',
-    'rar, cara kerja rar, random access response, rach, msg1, msg2, msg3, msg4, prach, preamble, ra-rnti, timing advance, temp c-rnti',
+    'rar, cara kerja rar, random access response, rach, msg1, msg2, msg3, msg4, prach, preamble, ra-rnti, timing advance, temp c-rnti, sharetechnote',
+    '4g_lte',
+    'sharetechnote',
+    'practical_guide',
     '4g_lte',
     'Mekanisme kerja prosedur Random Access (RACH), struktur isi Random Access Response (RAR/Msg2), perhitungan RA-RNTI, Timing Advance, dan Contention Resolution.',
     'MEKANISME KERJA RANDOM ACCESS RESPONSE (RAR / MSG2) (SHARETECHNOTE REFERENCE):
@@ -129,7 +138,10 @@ Sebelum UE memiliki alokasi kanal dedicated di uplink, UE tidak sinkron secara w
 (
     'oran_ric',
     'O-RAN Architecture & RAN Intelligent Controller (RIC)',
-    'ric, ric itu apa, o-ran, open ran, near-rt ric, non-rt ric, xapps, rapps, e2 interface, a1 interface, o1 interface, smo',
+    'ric, ric itu apa, o-ran, open ran, near-rt ric, non-rt ric, xapps, rapps, e2 interface, a1 interface, o1 interface, smo, sharetechnote',
+    'o_ran',
+    'sharetechnote',
+    'practical_guide',
     'o_ran',
     'Konsep dan arsitektur RAN Intelligent Controller (RIC) dalam Open RAN (O-RAN Alliance), pemisahan Near-RT RIC vs Non-RT RIC, xApps, rApps, serta antarmuka E2, A1, dan O1.',
     'ARSITEKTUR & FUNGSI RAN INTELLIGENT CONTROLLER (RIC) (SHARETECHNOTE & O-RAN REFERENCE):
@@ -166,7 +178,10 @@ B. Near-Real-Time RIC (Near-RT RIC):
 (
     'nr_endc_setup',
     '5G NSA Dual Connectivity (EN-DC Option 3x) & SgNB Addition',
-    'endc, en-dc, 5g nsa, sgnb addition, option 3x, split bearer, x2-c, x2-u, secondary node addition',
+    'endc, en-dc, 5g nsa, sgnb addition, option 3x, split bearer, x2-c, x2-u, secondary node addition, sharetechnote',
+    '5g_nr',
+    'sharetechnote',
+    'practical_guide',
     '5g_nr',
     'Alur pensinyalan 5G Non-Standalone (EN-DC Option 3x), prosedur penambahan SgNB (Secondary gNodeB), konfigurasi nr-Config-r15, dan pengalihan jalur data split bearer.',
     'ALUR PENSINYALAN 5G NSA EN-DC OPTION 3X (SHARETECHNOTE REFERENCE):
@@ -202,7 +217,10 @@ Step 5: Path Switch User Plane di EPC
 (
     '5g_sa_registration',
     '5G SA Initial Registration & SUCI / SUPI Authentication Flow',
-    '5g sa registration, 5g registration, suci, supi, ausf, udm, amf, 5gmm, nas registration, 5g standalone registration',
+    '5g sa registration, 5g registration, suci, supi, ausf, udm, amf, 5gmm, nas registration, 5g standalone registration, sharetechnote',
+    '5g_nr',
+    'sharetechnote',
+    'practical_guide',
     '5g_nr',
     'Prosedur registrasi awal 5G Standalone (3GPP TS 23.502), enkripsi privasi identitas SUCI menggunakan ECIES, otentikasi 5G-AKA via AUSF/UDM, dan setup Security Mode.',
     'ALUR REGISTRASI AWAL 5G STANDALONE (SA) (SHARETECHNOTE REFERENCE):

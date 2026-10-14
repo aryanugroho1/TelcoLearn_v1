@@ -503,14 +503,18 @@ PANDUAN KESINAMBUNGAN TEKNIS:
 5. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan heading markdown '#' atau tabel markdown.
 6. KERAHASIAAN SUMBER: JANGAN menyebutkan kata "ShareTechNote", "database", atau sumber internal.${trackContextInstruction}${languageInstruction}`;
   } else if (kbMatch) {
+    const backupContextSection = kbMatch.backup_content
+      ? `\n\nKONTEKS CADANGAN & PANDUAN PRAKTIS (ShareTechNote Reference):\n${kbMatch.backup_content}\n`
+      : '';
+
     userTurnText = `Pertanyaan dari pelajar:
 "${question}"
 
-KONTEKS TEKNIS:
-${kbMatch.core_content}
+KONTEKS TEKNIS UTAMA:
+${kbMatch.core_content}${backupContextSection}
 
 Instruksi Menjawab:
-1. Jawab pertanyaan pelajar secara komprehensif, teknis, dan presisi mengacu pada konteks teknis di atas dan spesifikasi 3GPP terkini.
+1. Jawab pertanyaan pelajar secara komprehensif, teknis, dan presisi mengacu pada konteks teknis di atas dan spesifikasi 3GPP/O-RAN terkini. Jika tersedia KONTEKS CADANGAN (ShareTechNote), jadikan sebagai pelengkap penjelas alur langkah praktis (call flow, diagram, intuisi konsep) yang memperjelas standar normatif utama.
 2. KERAHASIAAN SUMBER: JANGAN PERNAH menyebutkan kata "ShareTechNote", "database", "knowledge base", "basis data", "RAG", "Gemini", atau sumber data internal dalam teks jawaban. Penerima pesan tidak perlu dan tidak boleh tahu asal usul jawaban. Jawab langsung secara alami tanpa kalimat klise seperti "Berdasarkan referensi/database...".
 3. LARANGAN DEKLARASI DIRI ATAU JABATAN: DILARANG KERAS membuka jawaban dengan deklarasi peran, jabatan, atau klaim profesi apa pun (seperti 'Sebagai praktisi...', 'Sebagai engineer...', 'Sebagai asisten...'). Mulailah secara natural dan profesional.
 4. ANTI-HALLUCINATION: Jangan menambah informasi atau klaim yang bertentangan dengan konteks teknis di atas dan standar 3GPP.

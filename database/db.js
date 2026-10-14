@@ -509,11 +509,7 @@ export function searchKnowledgeBase(query) {
     .split(/\s+/)
     .filter(t => t.length >= 2);
 
-  if (tokens.length === 0) return null;
-
   const allTopics = db.prepare('SELECT * FROM knowledge_base').all();
-  let bestMatch = null;
-  let highestScore = 0;
 
   // Deteksi vendor atau domain yang disebut secara spesifik dalam kueri
   const mentionsHuawei = /\b(huawei|u2020|mae|mml|camgtcfg|cellmlb|smartcare)\b/i.test(clean);
@@ -522,6 +518,13 @@ export function searchKnowledgeBase(query) {
   const mentionsEricsson = /\b(ericsson|enm|mme|alex|cpi)\b/i.test(clean);
   const mentions3gpp = /\b(3gpp|rrc|nas|call flow|ts\s*38|ts\s*24|ts\s*23|ts\s*36)\b/i.test(clean);
   const mentionsOran = /\b(o-ran|oran|ric|near-rt|non-rt|xapp|rapp|e2|e2ap|e2sm|7\.2x)\b/i.test(clean);
+  const mentionsSharetechnote = /\b(sharetechnote|stn|jaeku)\b/i.test(clean);
+
+  let bestPrimaryMatch = null;
+  let highestPrimaryScore = 0;
+
+  let bestBackupMatch = null; // ShareTechNote sebagai backup knowledge
+  let highestBackupScore = 0;
 
   for (const topic of allTopics) {
     let score = 0;
@@ -531,6 +534,7 @@ export function searchKnowledgeBase(query) {
     const content = (topic.core_content || '').toLowerCase();
     const vendor = (topic.source_vendor || '').toLowerCase();
     const tech = (topic.technology || '').toLowerCase();
+    const isShareTechNote = vendor === 'sharetechnote' || topicKey.startsWith('stn_') || title.includes('sharetechnote') || content.includes('sharetechnote reference');
 
     // 1. Kecocokan vendor/domain spesifik (Prioritaskan sumber yang tepat)
     if (mentionsHuawei && vendor === 'huawei') score += 40;
@@ -539,6 +543,7 @@ export function searchKnowledgeBase(query) {
     if (mentionsEricsson && vendor === 'ericsson') score += 40;
     if (mentions3gpp && (vendor === '3gpp' || tech === '5g_nr' || tech === '4g_lte')) score += 20;
     if (mentionsOran && (vendor === 'o_ran' || tech === 'o_ran')) score += 40;
+    if (mentionsSharetechnote && isShareTechNote) score += 45;
 
     // 2. Kecocokan frasa kunci langsung di kolom keywords
     if (keywords.some(k => clean.includes(k) || k.includes(clean))) {
@@ -553,13 +558,43 @@ export function searchKnowledgeBase(query) {
       if (content.includes(token)) score += 1;
     }
 
-    if (score > highestScore && score >= 8) {
-      highestScore = score;
-      bestMatch = topic;
+    if (isShareTechNote) {
+      if (score > highestBackupScore && score >= 8) {
+        highestBackupScore = score;
+        bestBackupMatch = topic;
+      }
+    } else {
+      if (score > highestPrimaryScore && score >= 8) {
+        highestPrimaryScore = score;
+        bestPrimaryMatch = topic;
+      }
     }
   }
 
-  return bestMatch;
+  // Jika kueri secara spesifik menyebut sharetechnote, prioritaskan langsung
+  if (mentionsSharetechnote && bestBackupMatch) {
+    return bestBackupMatch;
+  }
+
+  // Jika ada primary match resmi (3GPP / O-RAN / Vendor):
+  if (bestPrimaryMatch) {
+    // Lampirkan ShareTechNote sebagai backup & penjelasan praktikal jika relevan
+    if (bestBackupMatch && highestBackupScore >= 12) {
+      bestPrimaryMatch.backup_title = bestBackupMatch.title;
+      bestPrimaryMatch.backup_content = bestBackupMatch.core_content;
+      bestPrimaryMatch.backup_source = 'ShareTechNote';
+      bestPrimaryMatch.backup_topic_key = bestBackupMatch.topic_key;
+    }
+    return bestPrimaryMatch;
+  }
+
+  // Jika tidak ada primary match resmi yang kuat, gunakan ShareTechNote sebagai fallback/backup utama
+  if (bestBackupMatch && highestBackupScore >= 8) {
+    bestBackupMatch.is_backup_fallback = true;
+    return bestBackupMatch;
+  }
+
+  return null;
 }
 
 export function getAllKnowledgeTopics() {
