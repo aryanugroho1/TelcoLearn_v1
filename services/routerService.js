@@ -530,14 +530,14 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
         return;
       }
 
-      saveUserFeedback({
+      const fbId = await saveUserFeedback({
         feedbackText: rawText,
         category: 'general'
       });
       updateUserState(user.jid, 'IDLE', null);
 
       await reply({
-        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn:\n_"${rawText}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya. Tetap semangat belajar! 🚀${LOOPBACK_FOOTER}`
+        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn (Tiket *#${fbId || 'BARU'}*):\n_"${rawText}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya. Tetap semangat belajar! 🚀${LOOPBACK_FOOTER}`
       });
       return;
     }
@@ -699,17 +699,15 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
       return;
     }
 
-    // Shortcut 6 -> /masukan /feedback /saran
+    // Shortcut 6 -> /masukan /feedback /saran (mendukung dengan atau tanpa tanda garis miring '/' dan titik dua ':')
     const isFeedbackCmd = (
-      lowerText === '/masukan' || lowerText.startsWith('/masukan ') ||
-      lowerText === '/feedback' || lowerText.startsWith('/feedback ') ||
-      lowerText === '/saran' || lowerText.startsWith('/saran ') ||
-      lowerText === '6'
+      lowerText === '6' ||
+      /^\/?(masukan|feedback|saran)([\s:]|$)/i.test(lowerText)
     );
 
     if (isFeedbackCmd) {
       const inlineFeedback = rawText
-        .replace(/^\/(masukan|feedback|saran)\s*/i, '')
+        .replace(/^\/?(masukan|feedback|saran)[:\s-]*/i, '')
         .trim();
 
       if (!inlineFeedback || lowerText === '6') {
@@ -720,13 +718,13 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
         return;
       }
 
-      saveUserFeedback({
+      const fbId = await saveUserFeedback({
         feedbackText: inlineFeedback,
         category: 'general'
       });
 
       await reply({
-        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn:\n_"${inlineFeedback}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya! 🚀${LOOPBACK_FOOTER}`
+        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn (Tiket *#${fbId || 'BARU'}*):\n_"${inlineFeedback}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya! 🚀${LOOPBACK_FOOTER}`
       });
       return;
     }
@@ -768,12 +766,14 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
     }
 
     // 6.5. ADMIN TOKEN DASHBOARD & REPORT (Khusus Admin Pribadi / Self-Chat)
-    if (
+    const isAdminCommand = (
       lowerText === '/admin' || lowerText.startsWith('/admin') ||
+      lowerText === 'admin' || lowerText.startsWith('admin ') ||
       lowerText === '/stats' || lowerText === '/db' || lowerText === '/database' ||
-      lowerText.startsWith('/masukan_list') || lowerText.startsWith('/list_masukan') ||
-      lowerText.startsWith('/feedback_list')
-    ) {
+      /^\/?(masukan_list|list_masukan|feedback_list|list_feedback|daftar_masukan|daftar masukan|list masukan)\b/i.test(lowerText)
+    );
+
+    if (isAdminCommand) {
       const configuredAdmins = [
         process.env.ADMIN_PHONE_NUMBER,
         process.env.BOT_PHONE_NUMBER,
@@ -795,16 +795,15 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
         return;
       }
 
-      // SUB-COMMAND: Admin Melihat Daftar Masukan Pengguna (/admin feedback, /admin masukan, /masukan_list)
+      // SUB-COMMAND: Admin Melihat Daftar Masukan Pengguna (/admin feedback, /admin masukan, /masukan_list, list masukan)
       if (
-        lowerText.includes('feedback') || lowerText.includes('masukan') ||
-        lowerText.startsWith('/masukan_list') || lowerText.startsWith('/list_masukan') ||
-        lowerText.startsWith('/feedback_list')
+        lowerText.includes('feedback') || lowerText.includes('masukan') || lowerText.includes('saran') ||
+        /^\/?(masukan_list|list_masukan|feedback_list|list_feedback|daftar_masukan|daftar masukan|list masukan)\b/i.test(lowerText)
       ) {
         const limitMatch = rawText.match(/\b\d+\b/);
         const limit = limitMatch ? parseInt(limitMatch[0], 10) : 10;
-        const feedbacks = getAllFeedbacks({ limit });
-        const fbMetrics = getFeedbackMetrics();
+        const feedbacks = await getAllFeedbacks({ limit });
+        const fbMetrics = await getFeedbackMetrics();
 
         if (feedbacks.length === 0) {
           await reply({

@@ -11,77 +11,10 @@
  */
 
 import crypto from 'crypto';
-import pg from 'pg';
 import { getDb } from '../database/db.js';
+import { getPgPool, isPostgresConnected } from '../database/postgres.js';
 
-const { Pool } = pg;
-
-// Konfigurasi Database URL dari Coolify
-const POSTGRES_URL = process.env.DATABASE_URL || 
-                     process.env.POSTGRES_URL || 
-                     process.env.CACHE_DATABASE_URL || 
-                     null;
-
-let pgPool = null;
-let isPostgresReady = false;
-let isInitAttempted = false;
-
-/**
- * Inisialisasi PostgreSQL pool jika URL tersedia
- */
-async function initPostgres() {
-  if (isInitAttempted) return isPostgresReady;
-  isInitAttempted = true;
-
-  if (!POSTGRES_URL) {
-    console.log('ℹ️ [Cache Service] DATABASE_URL tidak terdeteksi. Menggunakan driver SQLite lokal untuk cache.');
-    return false;
-  }
-
-  try {
-    pgPool = new Pool({
-      connectionString: POSTGRES_URL,
-      ssl: POSTGRES_URL.includes('sslmode=require') ? { rejectUnauthorized: false } : false,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000
-    });
-
-    // Test koneksi & auto-create tabel cache di PostgreSQL
-    const client = await pgPool.connect();
-    try {
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS llm_response_cache (
-          id SERIAL PRIMARY KEY,
-          query_hash VARCHAR(64) UNIQUE NOT NULL,
-          query_text TEXT NOT NULL,
-          response_text TEXT NOT NULL,
-          model_name VARCHAR(64) DEFAULT 'gemini-flash-lite-latest',
-          prompt_tokens INT DEFAULT 0,
-          output_tokens INT DEFAULT 0,
-          total_tokens INT DEFAULT 0,
-          hit_count INT DEFAULT 1,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          expires_at TIMESTAMP WITH TIME ZONE
-        );
-        CREATE INDEX IF NOT EXISTS idx_response_cache_hash ON llm_response_cache(query_hash);
-        CREATE INDEX IF NOT EXISTS idx_response_cache_expires ON llm_response_cache(expires_at);
-      `);
-      isPostgresReady = true;
-      console.log('🐘 [Cache Service] Terhubung sukses ke PostgreSQL Coolify (db-telcolearn). Tabel llm_response_cache siap.');
-    } finally {
-      client.release();
-    }
-    return true;
-  } catch (err) {
-    console.warn(`⚠️ [Cache Service] Gagal inisialisasi PostgreSQL (${err.message}). Beralih mulus ke SQLite lokal.`);
-    isPostgresReady = false;
-    return false;
-  }
-}
-
-// Inisialisasi awal di background
-initPostgres().catch(() => {});
+export { getPgPool, isPostgresConnected };
 
 /**
  * Memastikan tabel cache ada di SQLite lokal (Fallback Driver)
@@ -144,9 +77,10 @@ export async function getCachedResponse(query) {
   const queryHash = hashQuery(query);
 
   // 1. Coba via PostgreSQL (Coolify db-telcolearn)
-  if (isPostgresReady && pgPool) {
+  const pool = getPgPool();
+  if (pool) {
     try {
-      const res = await pgPool.query(`
+      const res = await pool.query(`
         SELECT response_text, model_name, prompt_tokens, output_tokens, total_tokens, hit_count, created_at
         FROM llm_response_cache
         WHERE query_hash = $1 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
@@ -156,7 +90,7 @@ export async function getCachedResponse(query) {
       if (res.rows.length > 0) {
         const row = res.rows[0];
         // Asynchronously update hit count
-        pgPool.query(`
+        pool.query(`
           UPDATE llm_response_cache 
           SET hit_count = hit_count + 1 
           WHERE query_hash = $1
@@ -246,9 +180,10 @@ export async function setCachedResponse(query, responseText, usage = {}, ttlHour
   const tTokens = usage.totalTokens || (pTokens + oTokens);
 
   // 1. Simpan ke PostgreSQL jika tersedia
-  if (isPostgresReady && pgPool) {
+  const pool = getPgPool();
+  if (pool) {
     try {
-      await pgPool.query(`
+      await pool.query(`
         INSERT INTO llm_response_cache (query_hash, query_text, response_text, model_name, prompt_tokens, output_tokens, total_tokens, hit_count, expires_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, CURRENT_TIMESTAMP + ($8 || ' hours')::INTERVAL)
         ON CONFLICT (query_hash) DO UPDATE SET
@@ -285,9 +220,10 @@ export async function setCachedResponse(query, responseText, usage = {}, ttlHour
  */
 export async function getCacheMetrics() {
   let pgStats = null;
-  if (isPostgresReady && pgPool) {
+  const pool = getPgPool();
+  if (pool) {
     try {
-      const res = await pgPool.query(`
+      const res = await pool.query(`
         SELECT 
           COUNT(*) as total_entries,
           COALESCE(SUM(hit_count), 0) as total_hits,

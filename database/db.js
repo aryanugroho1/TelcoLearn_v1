@@ -25,6 +25,7 @@ if (!fs.existsSync(dbDir)) {
 }
 
 import { DatabaseSync } from 'node:sqlite';
+import { getPgPool } from './postgres.js';
 
 let dbInstance = null;
 
@@ -501,40 +502,148 @@ export function getAllKnowledgeTopics() {
  * ----------------------------------------------------
  */
 
-export function saveUserFeedback({ feedbackText, category = 'general' }) {
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT INTO user_feedbacks (feedback_text, category, status)
-    VALUES (?, ?, 'PENDING')
-  `);
-  const result = stmt.run(feedbackText.trim(), category);
-  return result.lastInsertRowid;
-}
+export async function saveUserFeedback({ feedbackText, category = 'general' }) {
+  if (!feedbackText || typeof feedbackText !== 'string' || feedbackText.trim() === '') return null;
+  const cleanText = feedbackText.trim();
 
-export function getAllFeedbacks({ limit = 10, offset = 0, status = null } = {}) {
-  const db = getDb();
-  let query = `
-    SELECT id, feedback_text, category, status, created_at
-    FROM user_feedbacks
-  `;
-  const params = [];
-  if (status) {
-    query += ' WHERE status = ?';
-    params.push(status);
+  let pgId = null;
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        INSERT INTO user_feedbacks (feedback_text, category, status)
+        VALUES ($1, $2, 'PENDING')
+        RETURNING id
+      `, [cleanText, category]);
+      pgId = res.rows[0]?.id;
+      console.log(`🐘 [Feedback PostgreSQL] Tersimpan ke Coolify db-telcolearn dengan ID #${pgId}`);
+    } catch (pgErr) {
+      console.warn('⚠️ [Feedback PostgreSQL Write Error]:', pgErr.message);
+    }
   }
-  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(Number(limit) || 10, Number(offset) || 0);
-  return db.prepare(query).all(...params);
+
+  // Dual-write ke SQLite lokal
+  let sqliteId = null;
+  try {
+    const db = getDb();
+    const stmt = db.prepare(`
+      INSERT INTO user_feedbacks (feedback_text, category, status)
+      VALUES (?, ?, 'PENDING')
+    `);
+    const result = stmt.run(cleanText, category);
+    sqliteId = result.lastInsertRowid;
+  } catch (sqErr) {
+    console.error('⚠️ [Feedback SQLite Write Error]:', sqErr.message);
+  }
+
+  return pgId || sqliteId;
 }
 
-export function getFeedbackMetrics() {
-  const db = getDb();
-  const total = db.prepare('SELECT COUNT(*) as count FROM user_feedbacks').get()?.count || 0;
-  const pending = db.prepare("SELECT COUNT(*) as count FROM user_feedbacks WHERE status = 'PENDING'").get()?.count || 0;
-  return { total, pending };
+export async function getAllFeedbacks({ limit = 10, offset = 0, status = null } = {}) {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      let query = 'SELECT id, feedback_text, category, status, created_at FROM user_feedbacks';
+      const params = [];
+      if (status) {
+        query += ' WHERE status = $1 ORDER BY id DESC LIMIT $2 OFFSET $3';
+        params.push(status, Number(limit) || 10, Number(offset) || 0);
+      } else {
+        query += ' ORDER BY id DESC LIMIT $1 OFFSET $2';
+        params.push(Number(limit) || 10, Number(offset) || 0);
+      }
+      const res = await pool.query(query, params);
+      if (res.rows && res.rows.length > 0) {
+        return res.rows;
+      } else {
+        // Jika PostgreSQL masih kosong (misal database baru di Coolify), migrasikan data dari SQLite lokal
+        try {
+          const db = getDb();
+          const localRows = db.prepare('SELECT feedback_text, category, status, created_at FROM user_feedbacks').all();
+          if (localRows.length > 0) {
+            for (const r of localRows) {
+              await pool.query(`
+                INSERT INTO user_feedbacks (feedback_text, category, status, created_at)
+                VALUES ($1, $2, $3, $4)
+              `, [r.feedback_text, r.category || 'general', r.status || 'PENDING', r.created_at || new Date().toISOString()]);
+            }
+            console.log(`🐘 [Feedback Sync] Berhasil migrasi ${localRows.length} masukan lama dari SQLite ke PostgreSQL Coolify.`);
+            const refreshed = await pool.query(query, params);
+            if (refreshed.rows && refreshed.rows.length > 0) {
+              return refreshed.rows;
+            }
+          }
+        } catch (syncErr) {
+          console.warn('⚠️ [Feedback Sync Error]:', syncErr.message);
+        }
+      }
+    } catch (pgErr) {
+      console.warn('⚠️ [Feedback PostgreSQL Read Error]:', pgErr.message);
+    }
+  }
+
+  // Fallback SQLite lokal
+  try {
+    const db = getDb();
+    let query = `
+      SELECT id, feedback_text, category, status, created_at
+      FROM user_feedbacks
+    `;
+    const params = [];
+    if (status) {
+      query += ' WHERE status = ?';
+      params.push(status);
+    }
+    query += ' ORDER BY id DESC LIMIT ? OFFSET ?';
+    params.push(Number(limit) || 10, Number(offset) || 0);
+    return db.prepare(query).all(...params);
+  } catch (sqErr) {
+    console.error('⚠️ [Feedback SQLite Read Error]:', sqErr.message);
+    return [];
+  }
 }
 
-export function updateFeedbackStatus(feedbackId, status, adminNotes = null) {
+export async function getFeedbackMetrics() {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        SELECT 
+          COUNT(*) as total,
+          COALESCE(SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END), 0) as pending
+        FROM user_feedbacks
+      `);
+      if (res.rows[0] && parseInt(res.rows[0].total, 10) > 0) {
+        return {
+          total: parseInt(res.rows[0].total, 10),
+          pending: parseInt(res.rows[0].pending, 10)
+        };
+      }
+    } catch (e) {}
+  }
+
+  try {
+    const db = getDb();
+    const total = db.prepare('SELECT COUNT(*) as count FROM user_feedbacks').get()?.count || 0;
+    const pending = db.prepare("SELECT COUNT(*) as count FROM user_feedbacks WHERE status = 'PENDING'").get()?.count || 0;
+    return { total, pending };
+  } catch (e) {
+    return { total: 0, pending: 0 };
+  }
+}
+
+export async function updateFeedbackStatus(feedbackId, status, adminNotes = null) {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      await pool.query(`
+        UPDATE user_feedbacks 
+        SET status = $1, admin_notes = COALESCE($2, admin_notes)
+        WHERE id = $3
+      `, [status, adminNotes, feedbackId]);
+    } catch (e) {}
+  }
+
   const db = getDb();
   const stmt = db.prepare(`
     UPDATE user_feedbacks 
