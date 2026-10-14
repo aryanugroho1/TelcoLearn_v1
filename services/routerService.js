@@ -29,6 +29,7 @@ const saveUserFeedback = db.saveUserFeedback || (() => null);
 const getAllFeedbacks = db.getAllFeedbacks || (() => []);
 const getFeedbackMetrics = db.getFeedbackMetrics || (() => ({ total: 0, pending: 0 }));
 const updateFeedbackStatus = db.updateFeedbackStatus || (() => null);
+const clearLlmConversation = db.clearLlmConversation || (() => false);
 
 import {
   MESSAGES,
@@ -696,6 +697,16 @@ Ketik */reset* jika ingin mengubah alur preferensi belajar dari awal.${LOOPBACK_
     // Shortcut 5 -> /bantuan
     if (lowerText === '/bantuan' || lowerText === '/help' || lowerText === 'bantuan' || lowerText === 'help' || lowerText === '5') {
       await reply({ text: `${MESSAGES.HELP}${LOOPBACK_FOOTER}` });
+      return;
+    }
+
+    // Reset Topik Diskusi Percakapan (/clear, /topik_baru, atau 'topik baru')
+    const isClearTopicCmd = /^\/?(clear|cleartopic|topik_baru|topik baru|reset_topik|reset topik|new_topic|new topic)$/i.test(lowerText.trim());
+    if (isClearTopicCmd) {
+      clearLlmConversation(user.id);
+      await reply({
+        text: `🧹 *Konteks Diskusi Berhasil Direset!*\n\nRiwayat percakapan sebelumnya telah dibersihkan. Anda sekarang dapat menanyakan topik baru secara mandiri tanpa terpengaruh riwayat diskusi sebelumnya.\n\n_Silakan ketik pertanyaan atau topik telekomunikasi yang ingin Anda bahas!_${LOOPBACK_FOOTER}`
+      });
       return;
     }
 

@@ -317,19 +317,50 @@ export function logLlmConversation(userId, incomingQuery, aiResponse, latencyMs 
   }
 }
 
-export function getRecentLlmConversation(userId, limit = 5) {
+export function getRecentLlmConversation(userId, limit = 5, maxAgeMinutes = 20) {
   const db = getDb();
   if (!userId || Number(userId) <= 0) return [];
   try {
-    return db.prepare(`
+    const rows = db.prepare(`
       SELECT incoming_query, ai_response, created_at
       FROM llm_conversation_logs
       WHERE user_id = ?
       ORDER BY id DESC
       LIMIT ?
-    `).all(userId, limit).reverse();
+    `).all(userId, limit);
+
+    if (!rows || rows.length === 0) return [];
+
+    // Filter temporal freshness: abaikan percakapan yang lebih lama dari maxAgeMinutes (default 20 menit)
+    const now = Date.now();
+    const maxAgeMs = maxAgeMinutes * 60 * 1000;
+    const validRows = rows.filter(row => {
+      if (!row.created_at) return false;
+      const dateStr = row.created_at.includes('Z') ? row.created_at : row.created_at.replace(' ', 'T') + 'Z';
+      const createdAtMs = new Date(dateStr).getTime();
+      return !isNaN(createdAtMs) && (now - createdAtMs) <= maxAgeMs;
+    });
+
+    return validRows.reverse();
   } catch (e) {
     return [];
+  }
+}
+
+/**
+ * Menghapus riwayat percakapan LLM pengguna untuk memulai topik baru (Clean State)
+ */
+export function clearLlmConversation(userId) {
+  const db = getDb();
+  if (!userId || Number(userId) <= 0) return false;
+  try {
+    db.prepare(`
+      DELETE FROM llm_conversation_logs
+      WHERE user_id = ?
+    `).run(userId);
+    return true;
+  } catch (e) {
+    return false;
   }
 }
 

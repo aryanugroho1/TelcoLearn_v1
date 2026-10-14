@@ -292,6 +292,90 @@ Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan 
 }
 
 /**
+ * Mengekstrak kata kunci teknis dari teks untuk komparasi topik
+ */
+function extractTopicKeywords(text) {
+  if (!text || typeof text !== 'string') return [];
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !/^(dan|yang|atau|untuk|pada|dari|dengan|dalam|ke|di|ini|itu|apa|bagaimana|kenapa|mengapa|apakah|bisa|tolong|dong|adalah|yaitu|cara|maksud|tentang|seperti|hal|nya|saja|juga|kok|deh|nih|tuh)$/i.test(w));
+}
+
+/**
+ * Mendeteksi apakah pertanyaan merupakan lanjutan kontekstual (Follow-Up)
+ * atau pergeseran topik baru yang independen (Topic Shift).
+ */
+export function evaluateConversationContext(question, recentHistory) {
+  if (!recentHistory || recentHistory.length === 0) {
+    return { isFollowUp: false, reason: 'NO_RECENT_HISTORY' };
+  }
+
+  const cleanQ = question.trim().toLowerCase();
+  const lastInteraction = recentHistory[recentHistory.length - 1];
+  const lastTopic = (lastInteraction?.incoming_query || '').toLowerCase();
+
+  // 1. Permintaan bahasa (misal: "In English please")
+  const isLanguageFollowUp = /^\s*(in\s+english\s*(please)?|please\s*in\s*english|translate\s*to\s*english|english\s*version|tolong\s*bahasa\s*inggris|pake\s*bahasa\s*inggris|bahasa\s*inggris\s*dong)\s*$/i.test(question.trim());
+  if (isLanguageFollowUp) {
+    return { isFollowUp: true, reason: 'LANGUAGE_SWITCH' };
+  }
+
+  // 2. Deteksi Kata Rujukan Eksplisit (Anaphoric / Deictic References)
+  // Menunjuk langsung ke kasus sebelumnya, misal: "kasus ini", "masalah tadi", "kondisi tersebut", "penjelasan tadi"
+  const hasExplicitReference = /\b(kasus\s*(ini|itu|tadi|tersebut)|masalah\s*(ini|itu|tadi|tersebut)|skenario\s*(ini|itu|tadi|tersebut)|kondisi\s*(ini|itu|tadi|tersebut)|penjelasan\s*(ini|tadi|tersebut)|tadi\s*kan|yang\s*tadi|dari\s*jawaban\s*(tadi|di\s*atas)|pada\s*sa\s*atau\s*nsa|sa\s*atau\s*nsa)\b/i.test(cleanQ);
+  if (hasExplicitReference) {
+    return { isFollowUp: true, reason: 'EXPLICIT_REFERENCE' };
+  }
+
+  // 3. Konjungsi Lanjutan Percakapan di Awal Kalimat (Continuity Conjunctions)
+  // e.g., "terus solusinya apa?", "lalu apa dampaknya?", "berarti UE detach?", "nah kalau di 5G?"
+  const hasContinuityStarter = /^(terus\b|lalu\b|selanjutnya\b|berarti\b|artinya\b|nah\s*kalau\b|nah\s*terus\b|jadi\s*kalau\b|kalau\s*gitu\b|kalo\s*gitu\b|kalau\s*begitu\b)/i.test(cleanQ);
+  if (hasContinuityStarter) {
+    return { isFollowUp: true, reason: 'CONTINUITY_STARTER' };
+  }
+
+  // 4. Kalimat Elipsis / Pendek Tanpa Subjek Lengkap (<40 karakter)
+  // misal: "kenapa?", "solusinya apa?", "kalau di 4G?", "berapa timernya?"
+  const isShortElliptical = cleanQ.length < 40 && (
+    /^(kenapa|mengapa|solusinya|apa\s*solusinya|apa\s*efeknya|dampaknya|contohnya|berapa\b|bagaimana\s*solusinya)\b/i.test(cleanQ) ||
+    /^(kalau|kalo|pada)\s*(di\s*)?(5g|4g|sa|nsa|lte|nr)\b/i.test(cleanQ)
+  );
+  if (isShortElliptical) {
+    return { isFollowUp: true, reason: 'SHORT_ELLIPTICAL' };
+  }
+
+  // 5. Cek apakah ini adalah Pertanyaan Mandiri Berdiri Sendiri (Self-Contained Structure)
+  const isSelfContainedStructure = /^(bagaimana\s*(cara|mekanisme|alur|proses|konsep|arsitektur)|jelaskan\s*(cara|mekanisme|alur|proses|konsep|arsitektur|apa)|apa\s*(itu|definisi|pengertian|fungsi|perbedaan|beda)|sebutkan|bagaimanakah)\b/i.test(cleanQ);
+
+  // 6. Evaluasi Overlap Kata Kunci (Topic Shift Detection)
+  const newKeywords = extractTopicKeywords(cleanQ);
+  const oldKeywords = extractTopicKeywords(lastTopic);
+
+  const overlap = newKeywords.filter(k => oldKeywords.includes(k));
+  const overlapRatio = newKeywords.length > 0 ? overlap.length / newKeywords.length : 0;
+
+  // Jika berstruktur mandiri dan tidak memiliki overlap signifikan dengan topik lama (<25%)
+  if (isSelfContainedStructure && overlapRatio < 0.25) {
+    return { isFollowUp: false, reason: 'SELF_CONTAINED_TOPIC_SHIFT' };
+  }
+
+  // Jika pertanyaan panjang (>40 karakter) dengan entitas terpisah (0 overlap)
+  if (cleanQ.length >= 40 && overlapRatio === 0) {
+    return { isFollowUp: false, reason: 'DISJOINT_TOPIC_SHIFT' };
+  }
+
+  // Jika ada rujukan kata tunjuk umum ("ini", "itu") atau ada overlap kata kunci cukup tinggi (>=30%)
+  const hasDemonstrative = /\b(ini|itu|tersebut|tadi)\b/i.test(cleanQ);
+  if (hasDemonstrative || overlapRatio >= 0.3) {
+    return { isFollowUp: true, reason: 'KEYWORD_OVERLAP_OR_PRONOUN' };
+  }
+
+  return { isFollowUp: false, reason: 'DEFAULT_INDEPENDENT' };
+}
+
+/**
  * Menjawab pertanyaan umum seputar 4G/5G, O-RAN, dan Machine Learning
  * Menggunakan Continuous Multi-Turn Context, Smart RAG Gating, dan Draw-Back Capacity Token
  */
@@ -299,15 +383,15 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
   const { contextTrack } = options;
   const startTime = Date.now();
 
-  // DRAW-BACK CAPACITY TOKEN: Batasi riwayat maksimal 3 percakapan untuk menghemat token dan menjaga latensi <1s
+  // DRAW-BACK CAPACITY TOKEN & TEMPORAL SESSION WINDOW:
+  // Batasi riwayat maksimal 3 percakapan dan kedaluwarsa setelah 20 menit (mencegah topik pagi terbawa ke siang)
   const maxHistory = parseInt(process.env.MAX_CONVERSATION_HISTORY || '3', 10);
-  const recentHistory = getRecentLlmConversation(userId, maxHistory);
+  const sessionTimeoutMinutes = parseInt(process.env.CONVERSATION_SESSION_TIMEOUT_MINUTES || '20', 10);
+  const recentHistory = getRecentLlmConversation(userId, maxHistory, sessionTimeoutMinutes);
 
-  // 1. Deteksi Pertanyaan Lanjutan Kontekstual (Follow-Up with Anaphoric References)
-  const cleanQ = question.trim().toLowerCase();
-  const isLanguageFollowUp = /^\s*(in\s+english\s*(please)?|please\s*in\s*english|translate\s*to\s*english|english\s*version|tolong\s*bahasa\s*inggris|pake\s*bahasa\s*inggris|bahasa\s*inggris\s*dong)\s*$/i.test(question.trim());
-  const isFollowUpPattern = /^(apakah|kenapa|mengapa|bagaimana|apa\s*yang|terus|lalu|solusinya|penyebabnya|faktor|contohnya|dan|kalo|kalau|kenapa\s*bisa|apa\s*bedanya|kapan|dimana|siapa)\b|.*\b(ini|itu|tersebut|tadi|kasus\s*ini|masalah\s*ini|kondisi\s*ini|skenario\s*ini|pada\s*sa|pada\s*nsa|sa\s*atau\s*nsa)\b/i.test(cleanQ);
-  const isConversationalFollowUp = recentHistory.length > 0 && (isFollowUpPattern || isLanguageFollowUp || question.trim().length < 45);
+  // 1. Deteksi Pertanyaan Lanjutan Kontekstual vs Pergeseran Topik Baru
+  const contextEval = evaluateConversationContext(question, recentHistory);
+  const isConversationalFollowUp = contextEval.isFollowUp;
 
   const lastInteraction = recentHistory[recentHistory.length - 1];
   const lastTopic = lastInteraction?.incoming_query || '';
@@ -337,11 +421,10 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
 
   // 2. Smart RAG Gating:
   // JANGAN jalankan pencarian RAG artikel umum jika ini adalah follow-up lanjutan dari use-case aktif!
-  // Mencegah over-eager RAG (misal "apakah ini SA atau NSA" memicu artikel 3000 token registrasi 5G SA yang merusak konteks throughput).
   let kbMatch = null;
   if (!isConversationalFollowUp) {
     kbMatch = searchKnowledgeBase(question);
-  } else if (isLanguageFollowUp && lastTopic) {
+  } else if (contextEval.reason === 'LANGUAGE_SWITCH' && lastTopic) {
     kbMatch = searchKnowledgeBase(lastTopic);
   }
 
@@ -388,11 +471,15 @@ Pengguna terindikasi sedang menghadapi studi kasus atau masalah pekerjaan nyata 
 - Deteksi bahasa pengguna. Jika pengguna bertanya dalam BAHASA INGGRIS atau meminta ("In english please", "speak english", dll), Anda WAJIB menjawab 100% dalam BAHASA INGGRIS (English) yang fasih, profesional, dan mendalam.
 - Jika pengguna bertanya dalam Bahasa Indonesia, jawablah dalam Bahasa Indonesia.`;
 
-  // 4. DRAW-BACK CAPACITY TOKEN: Pangkas riwayat terdahulu agar hemat token (<350 tokens)
-  const historyTurns = recentHistory.flatMap(h => [
-    { role: 'user', parts: [{ text: h.incoming_query }] },
-    { role: 'model', parts: [{ text: h.ai_response.slice(0, 450) + (h.ai_response.length > 450 ? '...' : '') }] }
-  ]);
+  // 4. DRAW-BACK CAPACITY TOKEN & MULTI-TURN ISOLATION:
+  // Riwayat percakapan HANYA disertakan jika pertanyaan merupakan kelanjutan kontekstual (Follow-up) dari sesi aktif.
+  // Mencegah kontaminasi silang (cross-topic hallucination) jika pengguna bertanya topik baru.
+  const historyTurns = isConversationalFollowUp 
+    ? recentHistory.flatMap(h => [
+        { role: 'user', parts: [{ text: h.incoming_query }] },
+        { role: 'model', parts: [{ text: h.ai_response.slice(0, 450) + (h.ai_response.length > 450 ? '...' : '') }] }
+      ])
+    : [];
 
   // 5. Context-Anchored User Prompt
   let userTurnText = '';
@@ -400,18 +487,17 @@ Pengguna terindikasi sedang menghadapi studi kasus atau masalah pekerjaan nyata 
     userTurnText = `Pertanyaan pelajar:
 "${question}"
 
-[KONTEKS KASUS BERSAMBUNG - WAJIB DIIKUTI]:
-Pertanyaan di atas adalah kelanjutan langsung dari studi kasus yang baru saja kita bahas:
--> Kasus Utama: "${lastTopic}"
+[KONTEKS DISKUSI BERSAMBUNG]:
+Pertanyaan di atas terdeteksi sebagai kelanjutan dari topik diskusi sebelumnya:
+-> Topik Sebelumnya: "${lastTopic}"
 
-INSTRUKSI KESINAMBUNGAN KASUS (STRICT CONTINUITY):
-1. JAWABLAH pertanyaan di atas SECARA SPESIFIK DALAM KERANGKA KASUS DI ATAS ("${lastTopic}").
-2. Jika pertanyaan membandingkan arsitektur atau protokol (misal: "apakah ini 5G SA atau NSA?"), jelaskan secara spesifik bagaimana kasus tersebut bermanifestasi pada masing-masing skenario (misal: pada 5G NSA karena keterbatasan 4G anchor leg / split bearer X2 buffer delay vs pada 5G SA karena cell loading, alokasi PRB, atau core network).
-3. DILARANG KERAS mengabaikan use case di atas dan hanya menjelaskan definisi teori umum yang lepas dari konteks kasus!
-4. LARANGAN DEKLARASI DIRI ATAU JABATAN: DILARANG KERAS membuka jawaban dengan deklarasi peran, jabatan, atau klaim profesi apa pun (seperti 'Sebagai praktisi...', 'Sebagai engineer...', 'Sebagai asisten...'). Mulailah secara natural dan profesional.
-5. ANTI-HALLUCINATION: Berpijaklah pada fakta standar 3GPP/vendor resmi, dilarang mengarang counter atau pesan sinyal fiktif.
-6. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan heading markdown '#' atau tabel markdown.
-7. KERAHASIAAN SUMBER: JANGAN menyebutkan kata "ShareTechNote", "database", atau sumber internal.${trackContextInstruction}${languageInstruction}`;
+PANDUAN KESINAMBUNGAN TEKNIS:
+1. Hubungkan penjelasan dengan kasus "${lastTopic}" jika pertanyaan di atas menanyakan kelanjutan, perbandingan, dampak lanjutan, atau solusinya.
+2. Namun, jika pengguna beralih menanyakan konsep/entitas teknis baru yang mandiri, utamakan menjawab konsep baru tersebut secara tuntas tanpa memaksakan korelasi fiktif dengan topik sebelumnya.
+3. LARANGAN DEKLARASI DIRI ATAU JABATAN: DILARANG KERAS membuka jawaban dengan deklarasi peran, jabatan, atau klaim profesi apa pun (seperti 'Sebagai praktisi...', 'Sebagai engineer...', 'Sebagai asisten...'). Mulailah secara natural dan profesional.
+4. ANTI-HALLUCINATION: Berpijaklah pada fakta standar 3GPP/vendor resmi, dilarang mengarang counter atau pesan sinyal fiktif.
+5. Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan heading markdown '#' atau tabel markdown.
+6. KERAHASIAAN SUMBER: JANGAN menyebutkan kata "ShareTechNote", "database", atau sumber internal.${trackContextInstruction}${languageInstruction}`;
   } else if (kbMatch) {
     userTurnText = `Pertanyaan dari pelajar:
 "${question}"

@@ -230,6 +230,7 @@ TelcoLearn adalah bot pendamping pembelajaran 3GPP & diagnosis protokol radio.
 • */catat [isi]* - Menyimpan catatan teknis ke database
 • */notes* - Melihat daftar catatan pribadi
 • */profil* - Melihat informasi akun & preferensi
+• */clear* - Membersihkan memori percakapan untuk memulai topik baru
 • */reset* - Mengatur ulang profil belajar dari awal
 
 *Diagnostik AI (Gemini 3 Flash):*
