@@ -27,3 +27,5 @@ database/*.db-shm
 *.log
 npm-debug.log*
 reports/*.html
+
+*.xlsx
