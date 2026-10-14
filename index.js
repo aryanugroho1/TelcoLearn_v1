@@ -353,8 +353,11 @@ process.on('SIGTERM', () => {
 // ----------------------------------------------------
 function startWebServer() {
   const HTTP_PORT = process.env.PORT || 3000;
-  const server = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/api/status') {
+  const server = http.createServer(async (req, res) => {
+    const parsedUrl = new URL(req.url, 'http://localhost');
+    const pathname = parsedUrl.pathname;
+
+    if (pathname === '/health' || pathname === '/api/status') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: botConnectionStatus,
@@ -364,6 +367,102 @@ function startWebServer() {
       }));
       return;
     }
+
+    // Endpoint Ekspor Data Log & Analytics (Terproteksi Secret Key)
+    if (pathname === '/api/export-logs' || pathname === '/api/export-data') {
+      const authHeader = req.headers['authorization'] || '';
+      const secretQuery = parsedUrl.searchParams.get('secret') || parsedUrl.searchParams.get('key');
+      const expectedSecret = process.env.ADMIN_EXPORT_SECRET || 'telcolearn-export-key-2026';
+
+      if (secretQuery !== expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized. Invalid secret key.' }));
+        return;
+      }
+
+      try {
+        const { getDb } = await import('./database/db.js');
+        const { getPgPool } = await import('./services/postgres.js');
+        const db = getDb();
+
+        const conversationLogs = db.prepare(`
+          SELECT l.id, l.user_id, u.display_name, u.phone_number, l.incoming_query, l.ai_response, l.latency_ms, l.prompt_tokens, l.output_tokens, l.total_tokens, l.model_name, l.created_at
+          FROM llm_conversation_logs l
+          LEFT JOIN users u ON l.user_id = u.id
+          ORDER BY l.id DESC
+        `).all();
+
+        const feedbacksSqlite = db.prepare(`SELECT * FROM user_feedbacks ORDER BY id DESC`).all();
+
+        let pgCache = [];
+        let pgFeedbacks = [];
+        const pool = getPgPool();
+        if (pool) {
+          try {
+            const cacheRes = await pool.query(`SELECT id, query_hash, query_text, response_text, model_name, hit_count, created_at FROM llm_response_cache ORDER BY hit_count DESC LIMIT 100`);
+            pgCache = cacheRes.rows;
+            const fbRes = await pool.query(`SELECT * FROM user_feedbacks ORDER BY id DESC LIMIT 100`);
+            pgFeedbacks = fbRes.rows;
+          } catch (pgErr) {
+            console.warn('⚠️ [Export API] Gagal membaca PG:', pgErr.message);
+          }
+        }
+
+        const users = db.prepare(`SELECT id, phone_number, display_name, focus_track, current_state, streak_count, last_active_date, created_at FROM users ORDER BY id DESC`).all();
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          success: true,
+          server_time: new Date().toISOString(),
+          stats: {
+            total_logs: conversationLogs.length,
+            total_users: users.length,
+            total_feedbacks_sqlite: feedbacksSqlite.length,
+            total_cache_pg: pgCache.length,
+            total_feedbacks_pg: pgFeedbacks.length
+          },
+          conversation_logs: conversationLogs,
+          feedbacks: {
+            sqlite: feedbacksSqlite,
+            postgres: pgFeedbacks
+          },
+          cached_queries: pgCache,
+          users: users
+        }, null, 2));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // Endpoint Download SQLite Database File Langsung
+    if (pathname === '/api/download-db') {
+      const authHeader = req.headers['authorization'] || '';
+      const secretQuery = parsedUrl.searchParams.get('secret') || parsedUrl.searchParams.get('key');
+      const expectedSecret = process.env.ADMIN_EXPORT_SECRET || 'telcolearn-export-key-2026';
+
+      if (secretQuery !== expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized. Invalid secret key.' }));
+        return;
+      }
+
+      const dbPath = path.join(__dirname, 'database', 'telcolearn.db');
+      if (fs.existsSync(dbPath)) {
+        res.writeHead(200, {
+          'Content-Type': 'application/x-sqlite3',
+          'Content-Disposition': 'attachment; filename="telcolearn-coolify.db"'
+        });
+        fs.createReadStream(dbPath).pipe(res);
+        return;
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Database file not found.' }));
+        return;
+      }
+    }
+
 
     // Endpoint reset / force QR baru
     if (req.url === '/reset' || req.url === '/api/reset') {
