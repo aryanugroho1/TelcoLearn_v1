@@ -6,7 +6,11 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { GEMINI_SYSTEM_INSTRUCTION, GEMINI_SYSTEM_INSTRUCTION_EN, MESSAGES, detectQueryLanguage } from '../config/constants.js';
-import { logLlmConversation, searchKnowledgeBase, getRecentLlmConversation } from '../database/db.js';
+import * as db from '../database/db.js';
+
+const logLlmConversation = db.logLlmConversation || (() => null);
+const searchKnowledgeBase = db.searchKnowledgeBase || (() => []);
+const getRecentLlmConversation = db.getRecentLlmConversation || (() => []);
 import { getCachedResponse, setCachedResponse } from './cacheService.js';
 
 let genAIClient = null;

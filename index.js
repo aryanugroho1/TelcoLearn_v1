@@ -29,14 +29,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Self-Healing: Jika volume persistent storage Coolify di-mount menimpa /app/database,
-// pastikan file postgres.js tetap ada di folder database volume tersebut
+// pastikan seluruh file kode JavaScript & SQL terbaru tetap ada di folder database volume tersebut
 try {
   const dbDir = path.join(__dirname, 'database');
-  const sourcePostgres = path.join(__dirname, 'services', 'postgres.js');
-  const targetPostgres = path.join(dbDir, 'postgres.js');
+  const dbCoreDir = path.join(__dirname, 'database_core');
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
   }
+
+  // Sync from database_core if running inside Docker container with volume mount
+  if (fs.existsSync(dbCoreDir)) {
+    const coreFiles = fs.readdirSync(dbCoreDir);
+    for (const file of coreFiles) {
+      if (file.endsWith('.js') || file.endsWith('.sql')) {
+        fs.copyFileSync(path.join(dbCoreDir, file), path.join(dbDir, file));
+      }
+    }
+  }
+
+  const sourcePostgres = path.join(__dirname, 'services', 'postgres.js');
+  const targetPostgres = path.join(dbDir, 'postgres.js');
   if (!fs.existsSync(targetPostgres) && fs.existsSync(sourcePostgres)) {
     fs.copyFileSync(sourcePostgres, targetPostgres);
     console.log('🔄 [Self-Healing] Berhasil menyalin postgres.js ke volume persistent database.');

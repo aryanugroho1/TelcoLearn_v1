@@ -8,7 +8,10 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
-import { getDailyTokenMetrics, getWeeklyTokenTrend } from '../database/db.js';
+import * as db from '../database/db.js';
+
+const getDailyTokenMetrics = db.getDailyTokenMetrics || (() => null);
+const getWeeklyTokenTrend = db.getWeeklyTokenTrend || (() => []);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

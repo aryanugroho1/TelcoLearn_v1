@@ -7,7 +7,9 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { getRecentLlmConversation } from '../database/db.js';
+import * as db from '../database/db.js';
+
+const getRecentLlmConversation = db.getRecentLlmConversation || (() => []);
 import { callGeminiModel } from './geminiService.js';
 
 let genAIClient = null;

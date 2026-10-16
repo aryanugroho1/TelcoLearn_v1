@@ -7,7 +7,14 @@
  */
 
 import cron from 'node-cron';
-import { getActiveUsersForSlot, getNextModuleForUser, markModuleProgress, getUsersForStreakRescue } from '../database/db.js';
+import * as db from '../database/db.js';
+
+// Safe fallbacks to prevent crash if an older db.js is cached by Docker/volume
+const getActiveUsersForSlot = db.getActiveUsersForSlot || (() => []);
+const getNextModuleForUser = db.getNextModuleForUser || (() => null);
+const markModuleProgress = db.markModuleProgress || (() => null);
+const getUsersForStreakRescue = db.getUsersForStreakRescue || (() => []);
+
 import { sendSafeScheduled } from './antiBanService.js';
 import { sendDailyEmailReport } from './reportingService.js';
 

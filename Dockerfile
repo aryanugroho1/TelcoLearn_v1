@@ -21,11 +21,19 @@ RUN npm ci --omit=dev || npm install --omit=dev
 # Copy application source code
 COPY . .
 
+# Backup fresh source database code to sync with mounted volumes at container boot
+RUN mkdir -p /app/database_core && cp -r /app/database/* /app/database_core/
+
+# Copy and set permissions for entrypoint self-healing script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Ensure runtime directories exist for volumes
 RUN mkdir -p /app/auth_info_baileys /app/data /app/database /app/reports
 
 # Expose HTTP Web Gateway (QR Code portal & healthcheck)
 EXPOSE 3000
 
-# Start the TelcoLearn Baileys + Gemini daemon
+# Entrypoint auto-syncs database code to persistent volumes then starts daemon
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "index.js"]
