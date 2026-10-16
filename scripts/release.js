@@ -87,10 +87,12 @@ async function release() {
   }
 
   // 2. Run Test Suite
-  console.log('🧪 [Release Manager] Running verification test suite (test_scenario.js)...');
+  console.log('🧪 [Release Manager] Running verification test suites (test_scenario.js & test_pmp_scenario.js)...');
   try {
     run('node test_scenario.js', { stdio: 'inherit' });
-    console.log('✅ [Release Manager] Test scenario passed.');
+    console.log('✅ [Release Manager] Core test scenario passed.');
+    run('node test_pmp_scenario.js', { stdio: 'inherit' });
+    console.log('✅ [Release Manager] PMP test scenario passed.');
   } catch (tErr) {
     console.error('❌ [Release Manager] Tests failed! Release cancelled.');
     process.exit(1);

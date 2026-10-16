@@ -17,6 +17,7 @@ Anda memiliki keahlian multi-disiplin dan secara cerdas menyesuaikan sudut panda
 7. Senior Technical Mentor / Work Colleague Lens: Saat pengguna (baik pemula maupun engineer berpengalaman) menanyakan studi kasus kerja lapangan nyata ('ada issue di site...', 'sedang troubleshoot...', 'bagaimana langkah mengatasinya...'), berikan jawaban to-the-point dengan 'Actionable Troubleshooting Checklist' yang terstruktur tanpa menggurui secara textbook.
 8. Cellular IoT & Nirkabel: NB-IoT, LTE-M (eMTC/Cat-M1), 5G RedCap, Wi-Fi, Satelit/NTN, transmisi data sensor, Coverage Enhancement (CE Level), dan efisiensi daya PSM/eDRX.
 9. Machine Learning untuk Device Testing & Anomali KPI (LSTM, Isolation Forest, XGBoost, modem crash triage).
+10. Telecom Project Management & PMBOK (PMP) Lens: Saat pertanyaan membahas manajemen proyek telekomunikasi, rollout Base Station/Tower, swap site, modernisasi fiber, kontrak pengadaan (FFP, CPFF, T&M, PTA), perhitungan Earned Value Management (EVM: CPI, SPI, EAC, ETC, TCPI), Critical Path Method (CPM / Float / Slack), PERT, mitigasi risiko (Risk Register, EMV, Contingency Reserve), Acceptance Milestones (PAT, PAC, FAC), SLA Carrier-Grade (99.999%), dan integrasi Agile/Hybrid (Scrum, Sprints, Kanban, O-RAN CI/CD). Berikan kalkulasi matematis yang presisi dan panduan tata kelola berstandar PMI PMBOK.
 
 Pedoman Format Keluaran WhatsApp:
 - Output WAJIB menggunakan sintaks teks WhatsApp murni:
@@ -83,6 +84,7 @@ You possess multi-disciplinary expertise and intelligently adapt your perspectiv
 7. Senior Technical Mentor / Work Colleague Lens: When the user asks about real field work issues ('there is an issue on site...', 'troubleshooting...'), give a direct, to-the-point response with an 'Actionable Troubleshooting Checklist'.
 8. Cellular IoT & Wireless: NB-IoT, LTE-M (eMTC/Cat-M1), 5G RedCap, Wi-Fi, Satellite/NTN, coverage enhancement (CE Level), PSM/eDRX.
 9. Machine Learning for Telco Testing & KPI Anomalies (LSTM, Isolation Forest, XGBoost, modem crash triage).
+10. Telecom Project Management & PMBOK (PMP) Lens: When discussing telecom project management, base station/tower rollouts, site swaps, fiber modernization, procurement contracts (FFP, CPFF, T&M, PTA), Earned Value Management (EVM: CPI, SPI, EAC, ETC, TCPI), Critical Path Method (CPM / Float / Slack), PERT, risk management (Risk Register, EMV, Contingency Reserve), Acceptance Milestones (PAT, PAC, FAC), Carrier-Grade SLAs (99.999%), and Agile/Hybrid delivery (Scrum, Sprints, Kanban, O-RAN CI/CD). Deliver precise mathematical calculations and governance guidance aligned with PMI PMBOK standards.
 
 WhatsApp Output Guidelines:
 - Output MUST use pure WhatsApp text typography:
@@ -166,8 +168,8 @@ export function isObviousNonTelcoQuery(text) {
   if (!text || typeof text !== 'string') return false;
   const clean = text.toLowerCase().trim();
 
-  // Jika mengandung indikator telco/jaringan, jangan diblokir oleh pre-filter
-  const telcoIndicators = /\b(telco|telecom|telekomunikasi|jaringan|network|networking|signal|sinyal|radio|rf|4g|5g|3g|2g|lte|nr|gsm|umts|ran|o-ran|core|enb|gnb|ue|modem|sim|esim|plmn|imsi|imei|ip|tcp|udp|dns|dhcp|vlan|vpn|router|routing|switch|ping|latency|bandwidth|throughput|jitter|packet|loss|pcap|wireshark|rach|rrc|nas|mac|phy|pdcp|rlc|sdap|rsrp|rsrq|sinr|bler|cqi|mcs|pci|earfcn|ssb|mimo|beamforming|antenna|tilt|azimuth|drivetest|drive test|tems|nemo|qxdm|shannon|volte|vonr|ims|sip|sdp|satellite|ntn|haps|hasp|capex|opex|tco|spectrum|spektrum|wifi|bluetooth|fiber|dwdm|itu|3gpp|etsi|iot|nb-iot|cat-m|redcap|nokia|ericsson|huawei|zte|samsung|kpi|counter|oss|netact|enm|docker|kubernetes|k8s|helm|container|xapp|xapps|rapp|rapps|ric|e2sm|e2ap|a1|o1|o-cloud|linux|cnf|vran|ricxappframe)\b/i;
+  // Jika mengandung indikator telco/jaringan/project management, jangan diblokir oleh pre-filter
+  const telcoIndicators = /\b(telco|telecom|telekomunikasi|jaringan|network|networking|signal|sinyal|radio|rf|4g|5g|3g|2g|lte|nr|gsm|umts|ran|o-ran|core|enb|gnb|ue|modem|sim|esim|plmn|imsi|imei|ip|tcp|udp|dns|dhcp|vlan|vpn|router|routing|switch|ping|latency|bandwidth|throughput|jitter|packet|loss|pcap|wireshark|rach|rrc|nas|mac|phy|pdcp|rlc|sdap|rsrp|rsrq|sinr|bler|cqi|mcs|pci|earfcn|ssb|mimo|beamforming|antenna|tilt|azimuth|drivetest|drive test|tems|nemo|qxdm|shannon|volte|vonr|ims|sip|sdp|satellite|ntn|haps|hasp|capex|opex|tco|spectrum|spektrum|wifi|bluetooth|fiber|dwdm|itu|3gpp|etsi|iot|nb-iot|cat-m|redcap|nokia|ericsson|huawei|zte|samsung|kpi|counter|oss|netact|enm|docker|kubernetes|k8s|helm|container|xapp|xapps|rapp|rapps|ric|e2sm|e2ap|a1|o1|o-cloud|linux|cnf|vran|ricxappframe|pmp|pmbok|evm|cpi|spi|eac|etc|tcpi|cpm|critical path|total float|free float|wbs|pert|ccb|pac|fac|pat|sow|sitac|cme|procurement|contract|pta|liquidated damages|five nines|charter|rollout|scrum|sprint)\b/i;
   if (telcoIndicators.test(clean)) return false;
 
   // Pola topik non-telco yang sangat jelas (Bilingual ID & EN)
@@ -193,7 +195,8 @@ export const FOCUS_TRACKS = {
   1: { key: 'protocol_qa', label: '4G/5G Protocol QA 📡', label_en: '4G/5G Protocol QA 📡', label_id: '4G/5G Protocol QA 📡' },
   2: { key: 'drive_test', label: 'Field & Drive Test 🚙', label_en: 'Field & Drive Test 🚙', label_id: 'Field & Drive Test 🚙' },
   3: { key: 'ml_telco', label: 'ML Telco Testing 🤖', label_en: 'ML Telco Testing 🤖', label_id: 'ML Telco Testing 🤖' },
-  4: { key: 'log_telco', label: 'Log Analysis 📋', label_en: 'Log Analysis 📋', label_id: 'Log Analysis 📋' }
+  4: { key: 'log_telco', label: 'Log Analysis 📋', label_en: 'Log Analysis 📋', label_id: 'Log Analysis 📋' },
+  5: { key: 'telco_pmp', label: 'Telecom Project Management (PMP) 📋', label_en: 'Telecom Project Management (PMP) 📋', label_id: 'Telecom Project Management (PMP) 📋' }
 };
 
 export const REMINDER_PREFERENCES = {
@@ -227,16 +230,18 @@ _(Ketik *1* atau *2* / Reply with *1* or *2*)_`,
 2️⃣ Field & Drive Test 🚙
 3️⃣ ML & Data Analytics Telco 🤖
 4️⃣ Log Analysis & Troubleshooting 📋
+5️⃣ Telecom Project Management (PMP) 📋
 
-_(Ketik angka 1, 2, 3, atau 4, atau langsung tanyakan konsep jaringan apa saja ke sini!)_`,
+_(Ketik angka 1, 2, 3, 4, atau 5, atau langsung tanyakan konsep jaringan apa saja ke sini!)_`,
 
   WELCOME_TRACK_EN: `🎯 *Select Your Primary Study Track:*
 1️⃣ 4G/5G Protocol QA 📡
 2️⃣ Field & Drive Test 🚙
 3️⃣ ML & Data Analytics Telco 🤖
 4️⃣ Log Analysis & Troubleshooting 📋
+5️⃣ Telecom Project Management (PMP) 📋
 
-_(Reply with 1, 2, 3, or 4, or feel free to ask any cellular/network question directly!)_`,
+_(Reply with 1, 2, 3, 4, or 5, or feel free to ask any cellular/network question directly!)_`,
 
   WELCOME_ONBOARDING: `👋 *Selamat datang di TelcoLearn Bot!*
 Platform micro-learning & asisten cerdas AI untuk seluruh bidang Telekomunikasi (RAN, Core Network, Protokol 4G/5G, Field RF, O-RAN, hingga AI Telco).
@@ -247,8 +252,9 @@ Mari atur preferensi belajar harian Anda:
 2️⃣ Field & Drive Test 🚙
 3️⃣ ML & Data Analytics Telco 🤖
 4️⃣ Log Analysis & Troubleshooting 📋
+5️⃣ Telecom Project Management (PMP) 📋
 
-_(Ketik angka 1, 2, 3, atau 4, atau langsung tanyakan konsep jaringan apa saja ke sini!)_`,
+_(Ketik angka 1, 2, 3, 4, atau 5, atau langsung tanyakan konsep jaringan apa saja ke sini!)_`,
 
   ONBOARDING_ACK_ID: (trackLabel) => `🎯 *Fokus Belajar Anda Diatur ke:* *${trackLabel}*
 

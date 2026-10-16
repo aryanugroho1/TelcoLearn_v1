@@ -415,7 +415,7 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
       const isEnglishUser = user.preferred_language === 'en';
 
       let selected = null;
-      if (['1', '2', '3', '4'].includes(choice)) {
+      if (['1', '2', '3', '4', '5'].includes(choice)) {
         selected = FOCUS_TRACKS[choice];
       } else if (/^1\b|protocol|4g.*5g|qa/i.test(choice)) {
         selected = FOCUS_TRACKS['1'];
@@ -425,6 +425,8 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
         selected = FOCUS_TRACKS['3'];
       } else if (/^4\b|log|troubleshoot/i.test(choice)) {
         selected = FOCUS_TRACKS['4'];
+      } else if (/^5\b|pmp|pmbok|project.*management|rollout/i.test(choice)) {
+        selected = FOCUS_TRACKS['5'];
       }
 
       if (selected) {
@@ -440,10 +442,10 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
         updateUserState(user.jid, 'IDLE', null);
         await reply({ text: MESSAGES.MAIN_MENU(user) });
         return;
-      } else if (choice.length === 1 && ['5', '6', '7', '8', '9'].includes(choice)) {
+      } else if (choice.length === 1 && ['6', '7', '8', '9'].includes(choice)) {
         const promptMsg = isEnglishUser
-          ? `⚠️ Please reply with *1*, *2*, *3*, or *4* to select your study track:\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_(Or type *0* to go to the main menu)_`
-          : `⚠️ Mohon ketik angka *1*, *2*, *3*, atau *4* untuk memilih fokus belajar:\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_(Atau ketik *0* untuk langsung ke menu utama)_`;
+          ? `⚠️ Please reply with *1*, *2*, *3*, *4*, or *5* to select your study track:\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n5️⃣ Telecom Project Management (PMP)\n\n_(Or type *0* to go to the main menu)_`
+          : `⚠️ Mohon ketik angka *1*, *2*, *3*, *4*, atau *5* untuk memilih fokus belajar:\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n5️⃣ Telecom Project Management (PMP)\n\n_(Atau ketik *0* untuk langsung ke menu utama)_`;
         await reply({ text: promptMsg });
         return;
       } else {

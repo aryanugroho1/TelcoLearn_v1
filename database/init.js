@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './db.js';
 import { applyBilingualMigrations } from '../scripts/migrate_bilingual.js';
+import { seedPmpTrack } from '../scripts/seed_pmp_track.js';
 import { backupDatabase } from '../scripts/db_backup.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -87,6 +88,13 @@ export function initializeDatabase() {
     applyBilingualMigrations(db);
   } catch (biErr) {
     console.warn('ℹ️ Migrasi bilingual modules/quizzes dilewati:', biErr.message);
+  }
+
+  // 3.6. Jalankan penyemaian materi & kuis Telecom Project Management (PMP)
+  try {
+    seedPmpTrack();
+  } catch (pmpErr) {
+    console.warn('ℹ️ Penyemaian PMP track dilewati:', pmpErr.message);
   }
 
   // 4. Migrasi Kolom Token Tracking & Model Name pada llm_conversation_logs

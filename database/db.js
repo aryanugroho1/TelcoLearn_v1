@@ -186,10 +186,14 @@ export function getNextModuleForUser(userId) {
 
   // 1. Coba ambil modul belum dibaca yang sesuai prioritas track
   let trackCondition = '';
-  if (track === 'ml_telco') {
+  if (track === 'telco_pmp' || track === 'pmp') {
+    trackCondition = "CASE WHEN m.category = 'pmp' THEN 0 ELSE 1 END,";
+  } else if (track === 'ml_telco') {
     trackCondition = "CASE WHEN m.category = 'ml' THEN 0 ELSE 1 END,";
   } else if (track === 'drive_test') {
     trackCondition = "CASE WHEN m.category IN ('architecture', 'logfile') THEN 0 ELSE 1 END,";
+  } else if (track === 'log_telco') {
+    trackCondition = "CASE WHEN m.category = 'logfile' THEN 0 ELSE 1 END,";
   } else {
     // protocol_qa
     trackCondition = "CASE WHEN m.category IN ('callflow', 'logfile') THEN 0 ELSE 1 END,";
