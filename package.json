@@ -12,7 +12,12 @@
     "dashboard": "node scripts/dashboard.js",
     "ingest": "node scripts/ingest_knowledge.js",
     "mirror-standards": "node --max-old-space-size=4096 scripts/mirror_standards.js",
-    "import-excel": "node scripts/import_excel_parameters.js"
+    "import-excel": "node scripts/import_excel_parameters.js",
+    "db:backup": "node scripts/db_backup.js backup",
+    "db:restore": "node scripts/db_backup.js restore",
+    "db:list": "node scripts/db_backup.js list",
+    "release": "node scripts/release.js",
+    "rollback": "node scripts/rollback.js"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",

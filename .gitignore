@@ -16,11 +16,12 @@ auth_info_baileys/
 cooldown_lock.json
 qrcode.png
 
-# Databases
+# Databases & Runtime Data
 database/*.db
 database/*.db-journal
 database/*.db-wal
 database/*.db-shm
+data/
 *.sqlite
 *.db
 

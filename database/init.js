@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './db.js';
 import { applyBilingualMigrations } from '../scripts/migrate_bilingual.js';
+import { backupDatabase } from '../scripts/db_backup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +16,16 @@ const __dirname = path.dirname(__filename);
 export function initializeDatabase() {
   console.log('🔄 Menginisialisasi basis data SQLite TelcoLearn...');
   const db = getDb();
+
+  // Buat snapshot backup otomatis sebelum migrasi skema diterapkan
+  try {
+    const tableCheck = db.prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='users'").get();
+    if (tableCheck && tableCheck.count > 0) {
+      backupDatabase('pre-migration');
+    }
+  } catch (bErr) {
+    console.warn('⚠️ [Pre-Migration Backup Warning]:', bErr.message);
+  }
 
   // 0. Pre-Migration: Pastikan kolom baru ada pada tabel lama sebelum indeks dibuat
   try {
