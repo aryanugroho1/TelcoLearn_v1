@@ -14,6 +14,9 @@ const {
   updateUserPreferences,
   updateUserLanguage,
   updateUserStreak,
+  touchUserActivity,
+  getTopStreakUsers,
+  getUserLeaderboardRank,
   getNextModuleForUser,
   markModuleProgress,
   getNextQuizForUser,
@@ -40,7 +43,10 @@ import {
   detectTelcoLogPattern,
   isDriveTestInquiry,
   isObviousNonTelcoQuery,
-  getLoopbackFooter
+  getLoopbackFooter,
+  getRandomEspressoTip,
+  formatLeaderboard,
+  formatChallengeMessage
 } from '../config/constants.js';
 import {
   analyzeTelcoLog,
@@ -163,7 +169,7 @@ export async function resolveSenderIdentity(msg, sock) {
  * Kirim pesan balasan dengan simulasi typing singkat (clean & non-blocking)
  * Mengadopsi strategi pengiriman langsung dari ai-reception-zeroweb
  */
-export async function sendReply(sock, jid, content) {
+export async function sendReply(sock, jid, content, options = {}) {
   try {
     // Tampilkan typing bubble sebentar agar terasa interaktif
     await sock.sendPresenceUpdate('composing', jid).catch(() => {});
@@ -172,7 +178,7 @@ export async function sendReply(sock, jid, content) {
   } catch (e) {}
 
   console.log(`📤 [Outbound Send] Mengirim balasan ke ${jid}...`);
-  const sent = await sock.sendMessage(jid, content);
+  const sent = await sock.sendMessage(jid, content, options);
   if (sent?.key?.id) {
     recordSentMessageId(sent.key.id);
   }
@@ -203,10 +209,11 @@ export async function handleIncomingMessage(sock, msg) {
     // 0. ANTI-LOOP GUARD (persis ai-reception-zeroweb): Drop pesan yang dikirim oleh bot sendiri
     if (msg.key?.id && sentMessageIds.has(msg.key.id)) return;
 
-    // 1. STRICTLY IGNORE GROUP CHATS, BROADCASTS, CHANNELS/NEWSLETTERS
-    if (senderJid.endsWith('@g.us') || senderJid.includes('@g.us') || msg.key.participant) return;
+    // 1. FILTER BROADCAST, NEWSLETTERS & NON-WHATSAPP FEEDS
     if (senderJid.endsWith('@newsletter') || senderJid.includes('@newsletter')) return;
     if (senderJid === 'status@broadcast' || senderJid.endsWith('@broadcast')) return;
+
+    const isGroup = senderJid.endsWith('@g.us') || senderJid.includes('@g.us');
 
     const rawText = extractMessageText(msg.message);
     const hasImage = Boolean(msg.message?.imageMessage);
@@ -215,49 +222,108 @@ export async function handleIncomingMessage(sock, msg) {
 
     if (!rawText && !hasImage && !hasDocument) return;
 
-    // Resolusi identitas pengirim (LID & Phone mapping persis ai-reception-zeroweb)
-    const identity = await resolveSenderIdentity(msg, sock);
-    const cleanSenderPhone = identity.resolvedPhone || (senderJid.includes('@lid') ? '' : identity.phone);
-    const cleanSenderLid = identity.lid;
-
     const myPnRaw = (sock?.user?.id || '').split(':')[0].replace(/\D/g, '');
     const myLidRaw = (sock?.authState?.creds?.me?.lid || '').split(':')[0].replace(/\D/g, '');
     const myPn = myPnRaw ? `${myPnRaw}@s.whatsapp.net` : null;
     const myLid = myLidRaw ? `${myLidRaw}@lid` : null;
 
+    // Resolusi identitas pengirim (LID & Phone mapping persis ai-reception-zeroweb)
+    const identity = await resolveSenderIdentity(msg, sock);
+    const cleanSenderPhone = identity.resolvedPhone || (senderJid.includes('@lid') ? '' : identity.phone);
+    const cleanSenderLid = identity.lid;
+
     // Deteksi obrolan dengan diri sendiri (Message Yourself)
     const isTargetingSelf = Boolean(
-      (myLid && (senderJid === myLid || (cleanSenderLid && cleanSenderLid === myLidRaw))) ||
-      (myPn && (senderJid === myPn || (cleanSenderPhone && cleanSenderPhone === myPnRaw)))
+      !isGroup && (
+        (myLid && (senderJid === myLid || (cleanSenderLid && cleanSenderLid === myLidRaw))) ||
+        (myPn && (senderJid === myPn || (cleanSenderPhone && cleanSenderPhone === myPnRaw)))
+      )
     );
 
     // KRUSIAL ANTI-LOOP: Jika msg.key.fromMe = true TETAPI BUKAN obrolan ke bot sendiri,
-    // maka ini adalah pesan keluar yang dikirim ke kontak/user lain (misal materi scheduler atau balasan bot).
-    // JANGAN PERNAH diproses sebagai pesan masuk agar tidak terjadi feedback loop/burst overload!
+    // maka ini adalah pesan keluar yang dikirim ke kontak/user lain.
+    // JANGAN PERNAH diproses sebagai pesan masuk agar tidak terjadi feedback loop!
     if (msg.key?.fromMe && !isTargetingSelf) {
       return;
     }
 
+    // 1.1. SAFE GROUP MODE: Deteksi Mention, Quote Bot, atau Command Prefix
+    let groupCleanText = rawText.trim();
+    if (isGroup) {
+      const contextInfo = msg.message?.extendedTextMessage?.contextInfo ||
+                          msg.message?.imageMessage?.contextInfo ||
+                          msg.message?.documentMessage?.contextInfo;
+      const mentionedJids = contextInfo?.mentionedJid || [];
+      const isMentioned = Boolean(
+        (myPnRaw && mentionedJids.some(j => j.includes(myPnRaw))) ||
+        (myLidRaw && mentionedJids.some(j => j.includes(myLidRaw))) ||
+        (myPnRaw && rawText.includes(`@${myPnRaw}`))
+      );
+      const quotedParticipant = contextInfo?.participant || '';
+      const isQuotingBot = Boolean(
+        (myPnRaw && quotedParticipant.includes(myPnRaw)) ||
+        (myLidRaw && quotedParticipant.includes(myLidRaw))
+      );
+      const groupTriggerRegex = /^[!/](telco|tanya|ask|kuis|quiz|top|leaderboard|espresso|tip|pmp|help|bantuan|tantang|challenge|belajar|learn)\b/i;
+      const hasGroupPrefix = groupTriggerRegex.test(rawText);
+
+      // JIKA DI GRUP DAN TIDAK ADA TRIGGER SAMA SEKALI -> DROP SILENTLY (Anti-Spam & Zero Token Waste)
+      if (!isMentioned && !isQuotingBot && !hasGroupPrefix) {
+        return;
+      }
+
+      // Bersihkan trigger prefix dan mention agar prompt ke AI tetap natural
+      groupCleanText = rawText
+        .replace(groupTriggerRegex, '')
+        .replace(new RegExp(`@${myPnRaw}`, 'g'), '')
+        .trim();
+    }
+
     const isSelfChat = isTargetingSelf;
 
-    // Tentukan JID balasan:
-    // Jika self-chat, kirim ke nomor HP (@s.whatsapp.net).
-    // Jika pesan orang lain, balas langsung ke senderJid asli (persis ai-reception-zeroweb)
-    const replyJid = isSelfChat ? myPn : senderJid;
-    const phoneNumber = isSelfChat ? myPn.replace(/\D/g, '') : (cleanSenderPhone || cleanSenderLid || senderJid.replace(/\D/g, ''));
-    const pushName = msg.pushName || (isSelfChat ? 'Admin TelcoLearn' : 'Pelajar Telco');
+    // Tentukan JID balasan dan identitas database pengguna
+    let replyJid;
+    let phoneNumber;
+    let pushName;
+    let userDbKey;
+
+    if (isGroup) {
+      replyJid = senderJid;
+      const participantJid = msg.key?.participant || msg.participant || senderJid;
+      phoneNumber = participantJid.replace(/\D/g, '');
+      userDbKey = participantJid.includes('@lid') ? participantJid : `${phoneNumber}@s.whatsapp.net`;
+      pushName = msg.pushName || `Engineer ${phoneNumber.slice(-4)}`;
+    } else {
+      replyJid = isSelfChat ? myPn : senderJid;
+      phoneNumber = isSelfChat ? myPn.replace(/\D/g, '') : (cleanSenderPhone || cleanSenderLid || senderJid.replace(/\D/g, ''));
+      pushName = msg.pushName || (isSelfChat ? 'Admin TelcoLearn' : 'Pelajar Telco');
+      userDbKey = isSelfChat ? myPn : (cleanSenderPhone ? `${cleanSenderPhone}@s.whatsapp.net` : senderJid);
+    }
 
     const mediaLabel = hasImage ? '[GAMBAR]' : (hasDocument ? `[DOKUMEN: ${documentMsg.fileName || 'file'}]` : '');
-    console.log(`📩 [Inbound] Pesan dari ${senderJid} (Route ke: ${replyJid}, SelfChat: ${isSelfChat}): ${mediaLabel} "${rawText}"`);
+    console.log(`📩 [Inbound] Pesan dari ${senderJid} (${isGroup ? 'Group' : 'DM'}, Route ke: ${replyJid}): ${mediaLabel} "${rawText}"`);
 
-    const reply = (content) => sendReply(sock, replyJid, content);
+    const groupFooter = myPnRaw ? `\n\n💬 _Latihan privat, kuis harian & pantau streak:_\n👉 https://wa.me/${myPnRaw}?text=halo` : '';
+    const reply = (content) => {
+      let finalContent = content;
+      if (isGroup && finalContent && typeof finalContent.text === 'string') {
+        finalContent = {
+          ...finalContent,
+          text: `${finalContent.text}${groupFooter}`
+        };
+      }
+      return sendReply(sock, replyJid, finalContent, isGroup ? { quoted: msg } : {});
+    };
 
     // 1. Ambil atau Buat User di SQLite
-    const userDbKey = isSelfChat ? myPn : (cleanSenderPhone ? `${cleanSenderPhone}@s.whatsapp.net` : senderJid);
     let user = getUserByJid(userDbKey) || getUserByJid(senderJid);
-    const lowerText = rawText.toLowerCase().trim();
+    const effectiveText = isGroup ? (groupCleanText || rawText) : rawText;
+    let lowerText = effectiveText.toLowerCase().trim();
+    if (lowerText.startsWith('!')) {
+      lowerText = '/' + lowerText.slice(1);
+    }
     const isGreeting = ['halo', 'hi', 'hello', 'hai', 'p', 'tes', 'test', 'start', '/start', 'mulai'].some(g => lowerText === g || lowerText.startsWith(g + ' ') || lowerText.startsWith(g + '!'));
-    const isFreeInquiry = rawText.trim().length > 3 && !isGreeting && !['0', '1', '2', '3', '4', '5'].includes(rawText.trim());
+    const isFreeInquiry = effectiveText.trim().length > 3 && !isGreeting && !['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(effectiveText.trim()) && !lowerText.startsWith('/');
     const isMediaInquiry = hasImage || hasDocument;
 
     if (!user) {
@@ -265,13 +331,13 @@ export async function handleIncomingMessage(sock, msg) {
         jid: userDbKey,
         phone_number: phoneNumber,
         display_name: pushName,
-        current_state: (isSelfChat || isFreeInquiry || isMediaInquiry) ? 'IDLE' : 'ONBOARDING_LANG',
+        current_state: (isGroup || isSelfChat || isFreeInquiry || isMediaInquiry) ? 'IDLE' : 'ONBOARDING_LANG',
         focus_track: 'protocol_qa',
         preferred_language: 'id',
         reminder_preference: 'all'
       });
       console.log(`👋 [User Baru] Terdaftar: ${userDbKey} (State: ${user.current_state})`);
-      if (!isSelfChat && !isFreeInquiry && !isMediaInquiry) {
+      if (!isGroup && !isSelfChat && !isFreeInquiry && !isMediaInquiry) {
         await reply({ text: MESSAGES.WELCOME_LANGUAGE });
         return;
       }
@@ -302,6 +368,7 @@ export async function handleIncomingMessage(sock, msg) {
           return;
         }
 
+        touchUserActivity(user.jid);
         const visionAnalysis = await analyzeTelcoImage(buffer, mimeType, caption, user.id);
         await reply({ text: `${visionAnalysis}${getLoopbackFooter(user)}` });
       } catch (mediaErr) {
@@ -336,6 +403,7 @@ export async function handleIncomingMessage(sock, msg) {
           return;
         }
 
+        touchUserActivity(user.jid);
         const docAnalysis = await analyzeTelcoDocument(buffer, fileName, mimeType, caption, user.id);
         await reply({ text: `${docAnalysis}${getLoopbackFooter(user)}` });
       } catch (mediaErr) {
@@ -347,16 +415,18 @@ export async function handleIncomingMessage(sock, msg) {
 
     const currentState = user.current_state || 'IDLE';
 
-    // 2. GREETING & ONBOARDING INITIAL TRIGGER
+    // 2. GREETING & MAIN MENU TRIGGER
     if (isGreeting) {
-      if (user.current_state === 'IDLE') {
-        // Pengguna lama yang sudah selesai onboarding disapa kembali dengan menu utama
-        await reply({ text: MESSAGES.MAIN_MENU(user) });
+      if (user.current_state === 'ONBOARDING_LANG') {
+        await reply({ text: MESSAGES.WELCOME_LANGUAGE });
+        return;
+      } else if (user.current_state === 'ONBOARDING_TRACK') {
+        const isEnglishUser = user.preferred_language === 'en';
+        await reply({ text: isEnglishUser ? MESSAGES.WELCOME_TRACK_EN : MESSAGES.WELCOME_TRACK_ID });
         return;
       }
-      console.log(`👋 [Greeting] Pengguna ${user.jid} mengirimkan salam "${rawText}". Mengarahkan ke ONBOARDING_LANG.`);
-      updateUserState(user.jid, 'ONBOARDING_LANG', null);
-      await reply({ text: MESSAGES.WELCOME_LANGUAGE });
+      updateUserState(user.jid, 'IDLE', null);
+      await reply({ text: MESSAGES.MAIN_MENU(user) });
       return;
     }
 
@@ -712,6 +782,16 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
       return;
     }
 
+    // Panduan Perintah Grup WA (/telco, /tanya, /ask)
+    if (lowerText === '/telco' || lowerText === '/tanya' || lowerText === '/ask') {
+      const isEnglish = user.preferred_language === 'en';
+      const guideText = isEnglish
+        ? `📡 *TelcoLearn WhatsApp Group Assistant*\nHow to use in WhatsApp groups:\n\n• *!telco [question]* — Ask any 4G/5G radio protocol, drive test, or networking question\n• *!top* — View continuous study streak leaderboard 🏆\n• *!quiz* — 60-Second brain teaser challenge 🌙\n• *!espresso* — 30-Second quick field tip ☕\n• *!pmp* — Telecom Project Management bite 📋\n• Or tag/mention *@${myPnRaw}* with your query!`
+        : `📡 *TelcoLearn WhatsApp Group Assistant*\nCara menggunakan bot di grup:\n\n• *!telco [pertanyaan]* — Tanya konsep radio 4G/5G, KPI drivetest, atau networking\n• *!top* — Lihat papan peringkat streak komunitas 🏆\n• *!kuis* — Tantangan kuis 60 detik 🌙\n• *!espresso* — Tips teknis lapangan 30 detik ☕\n• *!pmp* — Studi kasus Telecom Project Management 📋\n• Atau mention *@${myPnRaw}* langsung dengan pertanyaan Anda!`;
+      await reply({ text: `${guideText}${isGroup ? '' : getLoopbackFooter(user)}` });
+      return;
+    }
+
     // Reset Topik Diskusi Manual (/clear, /topikbaru, /newtopic, /cleartopic)
     if (['/clear', '/topikbaru', '/newtopic', '/cleartopic', '/reset-topik', '/topik-baru'].includes(lowerText)) {
       clearLlmConversation(user.id);
@@ -829,6 +909,7 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
       }
 
       markModuleProgress(user.id, nextModule.id, 'SENT');
+      touchUserActivity(user.jid);
       updateUserState(user.jid, 'IDLE', { last_module_id: nextModule.id });
       const moduleBody = (isEnglishUser && nextModule.wa_text_body_en) ? nextModule.wa_text_body_en : nextModule.wa_text_body;
       await reply({ text: `${moduleBody}${getLoopbackFooter(user)}` });
@@ -993,6 +1074,72 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
       return;
     }
 
+    // Shortcut 7 -> /top atau /leaderboard atau /peringkat
+    if (lowerText === '/top' || lowerText === 'top' || lowerText === '/leaderboard' || lowerText === 'leaderboard' || lowerText === '/peringkat' || lowerText === 'peringkat' || lowerText === '7') {
+      const topUsers = getTopStreakUsers(10);
+      const userRank = getUserLeaderboardRank(user.id);
+      const leaderboardText = formatLeaderboard(topUsers, userRank, user.preferred_language);
+      await reply({ text: `${leaderboardText}${isGroup ? '' : getLoopbackFooter(user)}` });
+      return;
+    }
+
+    // Shortcut 8 -> /tantang atau /challenge (Viral Challenge Card)
+    if (lowerText === '/tantang' || lowerText === 'tantang' || lowerText === '/challenge' || lowerText === 'challenge' || lowerText === '8') {
+      const isEnglishUser = user.preferred_language === 'en';
+      let preferredModuleId = null;
+      try {
+        const payload = JSON.parse(user.state_payload || '{}');
+        preferredModuleId = payload.last_module_id || null;
+      } catch (e) {}
+
+      const quiz = getNextQuizForUser(user.id, preferredModuleId);
+      if (!quiz) {
+        await reply({
+          text: isEnglishUser
+            ? `No quiz available to challenge yet.${getLoopbackFooter(user)}`
+            : `Belum ada kuis yang tersedia untuk dijadikan tantangan.${getLoopbackFooter(user)}`
+        });
+        return;
+      }
+
+      const challengeCard = formatChallengeMessage(quiz, user, myPnRaw, user.preferred_language);
+      await reply({ text: `${challengeCard}${isGroup ? '' : getLoopbackFooter(user)}` });
+      return;
+    }
+
+    // Shortcut 9 -> /espresso atau /tip (30-detik Field Tip)
+    if (lowerText === '/espresso' || lowerText === 'espresso' || lowerText === '/tip' || lowerText === 'tip' || lowerText === '9') {
+      const tipText = getRandomEspressoTip(user.preferred_language);
+      touchUserActivity(user.jid);
+      await reply({ text: `${tipText}${isGroup ? '' : getLoopbackFooter(user)}` });
+      return;
+    }
+
+    // Shortcut /pmp -> Micro-Learning Telecom Project Management
+    if (lowerText === '/pmp' || lowerText === 'pmp') {
+      const isEnglishUser = user.preferred_language === 'en';
+      const db = getDb();
+      const pmpModule = db.prepare(`
+        SELECT m.* FROM modules m
+        WHERE m.module_code LIKE 'MOD-PMP%'
+          AND m.id NOT IN (
+            SELECT module_id FROM user_module_progress 
+            WHERE user_id = ? AND status = 'COMPLETED'
+          )
+        ORDER BY m.module_order ASC
+        LIMIT 1
+      `).get(user.id) || db.prepare("SELECT * FROM modules WHERE module_code LIKE 'MOD-PMP%' ORDER BY module_order ASC LIMIT 1").get();
+
+      if (pmpModule) {
+        markModuleProgress(user.id, pmpModule.id, 'SENT');
+        touchUserActivity(user.jid);
+        updateUserState(user.jid, 'IDLE', { last_module_id: pmpModule.id });
+        const body = (isEnglishUser && pmpModule.wa_text_body_en) ? pmpModule.wa_text_body_en : pmpModule.wa_text_body;
+        await reply({ text: `${body}${isGroup ? '' : getLoopbackFooter(user)}` });
+        return;
+      }
+    }
+
     // 6.4. SIMULASI & DIAGRAM VISUAL (/simulasi, /gambar, /visualisasi, atau permintaan teks natural)
     const isSimulationTrigger = (
       /^(\/(simulasi|gambar|visualisasi|diagram|grafik)\b|.*?\b(buat(kan)?|bikin|minta|tampilkan|perlihatkan|generate)\s*(gambar|simulasi|diagram|grafik|kurva|visualisasi)|.*?\b(gambarkan|simulasikan|visualisasikan)\b|.*?\b(ada|bisa)\s*(minta|buat(kan)?|lihat|tampilkan)?\s*(gambar|simulasi|diagram|grafik))/i.test(rawText)
@@ -1112,6 +1259,7 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
       await reply({
         text: `🔍 *Terdeteksi potongan log protokol radio.* Menganalisis RCA via AI Cognitive Engine...`
       });
+      touchUserActivity(user.jid);
       const analysis = await analyzeTelcoLog(rawText, user.id, user.preferred_language);
       await reply({ text: `${analysis}${getLoopbackFooter(user)}` });
       return;
@@ -1213,6 +1361,7 @@ _(Balas *1* untuk topik baru, atau *2* jika masih terkait)_`;
         }
       }
 
+      touchUserActivity(user.jid);
       const answer = await answerGeneralTelcoQuestion(rawText, user.id, {
         contextTrack: user.focus_track,
         preferredLanguage: user.preferred_language

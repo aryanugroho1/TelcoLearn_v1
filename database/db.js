@@ -156,6 +156,88 @@ export function updateUserStreak(jid, isCorrect) {
   return newStreak;
 }
 
+/**
+ * Mencatat aktivitas belajar harian pengguna (chat AI, baca modul, tanya log)
+ * Menjaga dan memajukan streak secara adil tanpa harus menunggu kuis
+ */
+export function touchUserActivity(jid) {
+  const db = getDb();
+  const user = getUserByJid(jid);
+  if (!user) return 0;
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (user.last_active_date === today) {
+    return user.streak_count || 1;
+  }
+
+  let newStreak = user.streak_count || 0;
+  if (!user.last_active_date) {
+    newStreak = 1;
+  } else {
+    const lastDate = new Date(user.last_active_date);
+    const todayDate = new Date(today);
+    const diffDays = Math.round((todayDate - lastDate) / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) {
+      newStreak += 1;
+    } else {
+      newStreak = 1;
+    }
+  }
+
+  const stmt = db.prepare(`
+    UPDATE users 
+    SET streak_count = ?, last_active_date = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE jid = ?
+  `);
+  stmt.run(newStreak, today, jid);
+  return newStreak;
+}
+
+/**
+ * Mengambil daftar 10 pengguna dengan streak belajar tertinggi untuk Papan Peringkat (Leaderboard)
+ */
+export function getTopStreakUsers(limit = 10) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT id, jid, display_name, phone_number, streak_count, focus_track, last_active_date
+    FROM users
+    WHERE streak_count > 0
+    ORDER BY streak_count DESC, updated_at DESC
+    LIMIT ?
+  `).all(limit);
+}
+
+/**
+ * Menghitung ranking leaderboard pengguna saat ini
+ */
+export function getUserLeaderboardRank(userId) {
+  const db = getDb();
+  const user = db.prepare('SELECT streak_count FROM users WHERE id = ?').get(userId);
+  if (!user || !user.streak_count) return null;
+
+  const higherCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE streak_count > ?').get(user.streak_count).count;
+  const totalWithStreak = db.prepare('SELECT COUNT(*) as count FROM users WHERE streak_count > 0').get().count;
+
+  return {
+    rank: higherCount + 1,
+    total: Math.max(1, totalWithStreak),
+    streak: user.streak_count
+  };
+}
+
+/**
+ * Mengambil pengguna yang streak-nya berisiko padam hari ini untuk dikirimkan Streak Rescue Alert
+ */
+export function getUsersForStreakRescue() {
+  const db = getDb();
+  const today = new Date().toISOString().slice(0, 10);
+  return db.prepare(`
+    SELECT * FROM users
+    WHERE streak_count >= 1
+      AND (last_active_date IS NULL OR last_active_date != ?)
+  `).all(today);
+}
+
 export function getActiveUsersForSlot(slot) {
   const db = getDb();
   // slot: 'morning', 'afternoon', 'night'

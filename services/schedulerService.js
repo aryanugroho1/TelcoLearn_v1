@@ -7,7 +7,7 @@
  */
 
 import cron from 'node-cron';
-import { getActiveUsersForSlot, getNextModuleForUser, markModuleProgress } from '../database/db.js';
+import { getActiveUsersForSlot, getNextModuleForUser, markModuleProgress, getUsersForStreakRescue } from '../database/db.js';
 import { sendSafeScheduled } from './antiBanService.js';
 import { sendDailyEmailReport } from './reportingService.js';
 
@@ -96,6 +96,45 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
 }
 
 /**
+ * Dispatch peringatan streak akan padam (Streak Rescue Alert) pada pukul 20:00 WIB
+ */
+export async function dispatchStreakRescue(maybeSock) {
+  const sock = maybeSock || (typeof currentSocketGetter === 'function' ? currentSocketGetter() : currentSocketGetter);
+  if (!sock) return;
+
+  try {
+    const atRiskUsers = getUsersForStreakRescue();
+    if (!atRiskUsers || atRiskUsers.length === 0) {
+      console.log('🔥 [Streak Rescue] Tidak ada pengguna berisiko padam streak hari ini.');
+      return;
+    }
+
+    console.log(`🔥 [Streak Rescue] Ditemukan ${atRiskUsers.length} pengguna berisiko padam streak.`);
+    let count = 0;
+    for (const user of atRiskUsers) {
+      if (user.reminder_preference === 'none') continue;
+
+      const isEnglishUser = user.preferred_language === 'en';
+      const rescueText = isEnglishUser
+        ? `🚨 *STREAK RESCUE ALERT!* 🔥\n\nHey *${user.display_name}*! Your *${user.streak_count}-day learning streak* is about to expire at midnight!\n\nSave your streak with 1 quick step:\n👉 Reply *2* (or */quiz*) to take a 60-second quiz\n👉 Reply *9* (or */espresso*) for a 30-second field tip`
+        : `🚨 *PERINGATAN STREAK AKAN HANGUS!* 🔥\n\nHalo *${user.display_name}*! Rekor belajar *${user.streak_count} hari berturut-turut* Anda akan hangus tengah malam ini!\n\nYuk selamatkan streak Anda dengan 1 aktivitas cepat:\n👉 Balas *2* (atau */quiz*) untuk jawab kuis 60 detik\n👉 Balas *9* (atau */espresso*) untuk tips lapangan 30 detik`;
+
+      try {
+        await sendSafeScheduled(sock, user.jid, { text: rescueText });
+        count++;
+        if (count % 5 === 0 && count < atRiskUsers.length) {
+          await new Promise((r) => setTimeout(r, 20000));
+        }
+      } catch (e) {
+        console.error(`❌ Gagal mengirim streak rescue ke ${user.jid}:`, e.message);
+      }
+    }
+  } catch (err) {
+    console.error('❌ Error in dispatchStreakRescue:', err);
+  }
+}
+
+/**
  * Inisialisasi cron jobs
  */
 export function initScheduler(sockOrGetter) {
@@ -123,13 +162,20 @@ export function initScheduler(sockOrGetter) {
   }, { timezone });
   activeCronJobs.push(afternoonJob);
 
-  // 3. Slot Malam (20:30 WIB)
+  // 3. Streak Rescue Alert (20:00 WIB - Penyelamat Streak Sebelum Tengah Malam)
+  const streakRescueJob = cron.schedule('0 20 * * *', async () => {
+    console.log('🔥 [Scheduler Worker] Memicu pengecekan streak rescue alert...');
+    await dispatchStreakRescue();
+  }, { timezone });
+  activeCronJobs.push(streakRescueJob);
+
+  // 4. Slot Malam (20:30 WIB)
   const nightJob = cron.schedule('30 20 * * *', () => {
     dispatchScheduledSlot('night');
   }, { timezone });
   activeCronJobs.push(nightJob);
 
-  // 4. Laporan Kuota & Token Harian ke Email Admin (21:30 WIB)
+  // 5. Laporan Kuota & Token Harian ke Email Admin (21:30 WIB)
   const reportJob = cron.schedule('30 21 * * *', async () => {
     console.log('📊 [Scheduler Worker] Memicu pengiriman laporan kuota token harian ke email admin...');
     await sendDailyEmailReport();
@@ -137,10 +183,11 @@ export function initScheduler(sockOrGetter) {
   activeCronJobs.push(reportJob);
 
   console.log(`📅 [Scheduler Worker] Aktif 24/7 untuk zona waktu ${timezone}:`);
-  console.log(`   🌅 Pagi    : 07:30 WIB`);
-  console.log(`   ☀️ Siang   : 12:30 WIB`);
-  console.log(`   🌙 Malam   : 20:30 WIB`);
-  console.log(`   📊 Report  : 21:30 WIB (Daily Token & Quota Email)`);
+  console.log(`   🌅 Pagi          : 07:30 WIB`);
+  console.log(`   ☀️ Siang         : 12:30 WIB`);
+  console.log(`   🔥 Streak Rescue : 20:00 WIB`);
+  console.log(`   🌙 Malam         : 20:30 WIB`);
+  console.log(`   📊 Report        : 21:30 WIB (Daily Token & Quota Email)`);
 }
 
 /**

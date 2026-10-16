@@ -308,13 +308,16 @@ Halo, *${user?.display_name || 'Pelajar Telco'}*!
 🔥 Streak: *${user?.streak_count || 0} Hari*
 🌐 Bahasa: *Bahasa Indonesia* 🇮🇩
 
-Pilih opsi di bawah _(cukup ketik angka 1 - 6 atau perintahnya)_:
+Pilih opsi di bawah _(cukup ketik angka 1 - 9 atau perintahnya)_:
 1️⃣ */belajar* - Baca materi micro-dose berikutnya
 2️⃣ */quiz* - Tantang kuis kognitif (tambah streak!)
 3️⃣ */streak* - Statistik & konsistensi belajar
 4️⃣ */profil* - Pengaturan track & jadwal reminder
 5️⃣ */bantuan* - Panduan penggunaan bot
 6️⃣ */masukan* - Kirim saran & ide pengembangan bot
+7️⃣ */top* - Papan peringkat streak komunitas (Leaderboard) 🏆
+8️⃣ */tantang* - Tantang rekan / bagikan kuis ke grup WA 🎯
+9️⃣ */espresso* - Tips kilat 30 detik insinyur telco ☕
 
 💡 *Tips Pro:*
 • Ketik */simulasi* untuk melihat grafik simulasi RF & diagram visual dari topik yang baru saja dibahas!
@@ -329,13 +332,16 @@ Hello, *${user?.display_name || 'Telco Learner'}*!
 🔥 Streak: *${user?.streak_count || 0} Days*
 🌐 Language: *English* 🇬🇧
 
-Choose an option below _(reply 1 - 6 or type the command)_:
+Choose an option below _(reply 1 - 9 or type the command)_:
 1️⃣ */learn* - Read next micro-dose module
 2️⃣ */quiz* - 60-second quiz challenge (boost streak!)
 3️⃣ */streak* - Consistency & learning stats
 4️⃣ */profile* - Track & notification settings
 5️⃣ */help* - Usage guide & command reference
 6️⃣ */feedback* - Send suggestions & feedback
+7️⃣ */top* - Community Streak Leaderboard 🏆
+8️⃣ */challenge* - Challenge peers / share quiz to WA group 🎯
+9️⃣ */espresso* - 30-Second quick tip for telco engineers ☕
 
 💡 *Pro Tips:*
 • Type */sim* to render RF simulation plots & visual diagrams!
@@ -349,31 +355,38 @@ _(Type *0* anytime to return to this menu)_`,
     }
     return `📖 *PANDUAN PENGGUNAAN TELCOLEARN*
 
-TelcoLearn adalah platform micro-learning & asisten AI komprehensif untuk seluruh bidang Telekomunikasi (RAN, Core Network, Transmisi, Protokol 3GPP, hingga AI & Otomasi Jaringan).
+TelcoLearn adalah platform micro-learning & asisten AI komprehensif untuk seluruh bidang Telekomunikasi (RAN, Core Network, Transmisi, Protokol 3GPP, Manajemen Proyek PMP, hingga AI & Otomasi Jaringan).
 
 *Daftar Perintah:*
-• */menu* - Membuka menu interaktif
-• */belajar* - Mengirim materi micro-learning 3 menit
-• */quiz* - Membuka kuis pilihan ganda
-• */simulasi* - Membuat grafik simulasi RF / diagram visual kasus yang dibahas
+• */menu* - Membuka menu interaktif (Shortcut: *0*)
+• */belajar* - Mengirim materi micro-learning 3 menit (Shortcut: *1*)
+• */quiz* - Membuka kuis pilihan ganda (Shortcut: *2*)
+• */streak* - Menampilkan rekor konsistensi belajar (Shortcut: *3*)
+• */profil* - Melihat informasi akun & preferensi (Shortcut: *4*)
+• */bantuan* - Panduan lengkap bot (Shortcut: *5*)
+• */masukan [isi]* - Kirim saran / masukan fitur (Shortcut: *6*)
+• */top* - Papan peringkat streak komunitas (Shortcut: *7*)
+• */tantang* - Buat kartu tantangan kuis untuk grup WA (Shortcut: *8*)
+• */espresso* - Tips kilat 30 detik untuk insinyur telco (Shortcut: *9*)
+• */simulasi* - Membuat grafik simulasi RF / diagram visual
 • */lang [en/id]* - Mengganti bahasa bot (English / Bahasa Indonesia)
-• */masukan [isi]* - Kirim saran / masukan untuk fitur baru & materi bot
-• */batal* - Membatalkan sesi kuis atau pencatatan
-• */streak* - Menampilkan rekor konsistensi belajar
-• */track [1/2/3/4]* - Mengganti jalur fokus materi (QA, Drive Test, ML, Log Analysis)
+• */track [1-5]* - Mengganti jalur fokus belajar (QA, Drive Test, ML, Log, PMP)
 • */jadwal [1/2/3]* - Mengatur jadwal notifikasi harian
 • */catat [isi]* - Menyimpan catatan teknis ke database
 • */notes* - Melihat daftar catatan pribadi
-• */profil* - Melihat informasi akun & preferensi
-• */topikbaru* - Membersihkan riwayat percakapan untuk memulai topik baru
-• */clear* - Shortcut reset riwayat percakapan
+• */clear* - Reset riwayat percakapan untuk topik baru
 • */reset* - Mengatur ulang profil belajar dari awal
+
+*Mode WhatsApp Group (Viral Learning):*
+Tambahkan bot ke grup WhatsApp proyek/kantor Anda! Bot tidak akan mengganggu obrolan santai grup dan hanya akan merespons jika:
+1. Di-tag / mention langsung (@TelcoLearn)
+2. Atau diawali perintah: *!telco [pertanyaan]*, *!quiz*, *!pmp*, atau *!top*
 
 *Diagnostik AI (Gemini 3 Flash):*
 Cukup ketik atau paste potongan teks log radio seperti:
-RRCConnectionReject waitTime: 16
+\`\`\`RRCConnectionReject waitTime: 16\`\`\`
 atau
-5GMM cause = 11 (PLMN not allowed)
+\`\`\`5GMM cause = 11 (PLMN not allowed)\`\`\`
 Bot akan otomatis mendeteksi pola log dan menyajikan Root Cause Analysis (RCA), dampak pada modem UE, serta langkah pengujian di laboratorium!
 
 ☕ *Dukung Pengembangan TelcoLearn:*
@@ -382,30 +395,38 @@ Untuk support bisa ke https://saweria.co/TelcoLearn`;
 
   HELP_EN: `📖 *TELCOLEARN USER GUIDE*
 
-TelcoLearn is a micro-learning platform & AI technical companion for Telecom & Networking (RAN, Core Network, 3GPP Protocols, O-RAN, and AI Analytics).
+TelcoLearn is a micro-learning platform & AI technical companion for Telecom & Networking (RAN, Core Network, 3GPP Protocols, Project Management PMP, O-RAN, and AI Analytics).
 
 *Command Reference:*
-• */menu* - Interactive navigation menu
-• */learn* or */belajar* - Read 3-minute micro-learning module
-• */quiz* - Multiple-choice cognitive quiz
-• */sim* or */simulasi* - Render RF simulation graphs / architecture diagrams
+• */menu* - Interactive navigation menu (Shortcut: *0*)
+• */learn* - Read 3-minute micro-learning module (Shortcut: *1*)
+• */quiz* - Multiple-choice cognitive quiz (Shortcut: *2*)
+• */streak* - Display study consistency & metrics (Shortcut: *3*)
+• */profile* - View account info & preferences (Shortcut: *4*)
+• */help* - Usage guide & command reference (Shortcut: *5*)
+• */feedback [text]* - Send ideas / feature suggestions (Shortcut: *6*)
+• */top* - Community Streak Leaderboard (Shortcut: *7*)
+• */challenge* - Generate quiz challenge card for WA groups (Shortcut: *8*)
+• */espresso* - 30-Second quick tip for telco engineers (Shortcut: *9*)
+• */sim* or */simulasi* - Render RF simulation graphs / diagrams
 • */lang [en/id]* - Switch bot language (English / Bahasa Indonesia)
-• */feedback [text]* - Send ideas / feature suggestions
-• */cancel* or */batal* - Cancel quiz or note taking
-• */streak* - Display study consistency & metrics
-• */track [1/2/3/4]* - Switch study track (Protocol QA, Drive Test, ML, Log Analysis)
+• */track [1-5]* - Switch study track (Protocol QA, Drive Test, ML, Log, PMP)
 • */schedule [1/2/3]* - Configure daily notification times
 • */note [text]* - Save technical notes to database
 • */notes* - List your personal saved notes
-• */profile* - View account info & preferences
 • */clear* - Clear conversation context / start fresh topic
 • */reset* - Restart onboarding setup from scratch
 
+*WhatsApp Group Mode (Collaborative Learning):*
+Add the bot to your project WhatsApp group! The bot silently ignores everyday group chatter and only responds when:
+1. Directly tagged / mentioned (@TelcoLearn)
+2. Or preceded with command: *!telco [question]*, *!quiz*, *!pmp*, or *!top*
+
 *AI Diagnostics (Gemini 3 Flash):*
 Simply paste radio log snippets such as:
-RRCConnectionReject waitTime: 16
+\`\`\`RRCConnectionReject waitTime: 16\`\`\`
 or
-5GMM cause = 11 (PLMN not allowed)
+\`\`\`5GMM cause = 11 (PLMN not allowed)\`\`\`
 The bot will automatically perform Root Cause Analysis (RCA), explain modem behavior, and provide laboratory verification steps!
 
 ☕ *Support TelcoLearn Development:*
@@ -456,3 +477,124 @@ I support inquiries regarding:
 
 Please ask a question related to cellular protocols, networking, vendor KPIs, or telco testing! 🚀`
 };
+
+export const TELCO_ESPRESSO_TIPS = [
+  {
+    category: 'RF Optimization',
+    tip_id: `☕ *Telco Espresso: Aturan Emas PCI Mod 3*\n\nJika dua sel bertetangga memiliki *PCI mod 3 yang sama*, sinyal sinkronisasi utama (PSS / CRS) akan bertabrakan di subcarrier frekuensi yang persis sama. Akibatnya, nilai SINR anjlok drastis (pilot pollution) meskipun daya sinyal RSRP sangat kuat (-75 dBm).\n\n💡 *Solusi Lapangan:* Pastikan sel co-channel bertetangga memiliki sisa bagi PCI / 3 yang berbeda (0, 1, atau 2)!`,
+    tip_en: `☕ *Telco Espresso: The Golden PCI Mod 3 Rule*\n\nIf two neighbor cells share the *same PCI mod 3*, their primary synchronization signals (PSS / CRS) collide on identical subcarriers. This creates severe SINR degradation (pilot pollution) even with strong RSRP (-75 dBm).\n\n💡 *Field Fix:* Always ensure co-channel neighbor cells have distinct PCI modulo 3 remainders (0, 1, or 2)!`
+  },
+  {
+    category: '5G Core',
+    tip_id: `☕ *Telco Espresso: 5GSM Cause #27 Missing DNN*\n\nSaat UE gagal mendirikan PDU Session dan log QXDM memunculkan \`\`\`5GSM Cause #27 (Missing or unknown DNN)\`\`\`, modem meminta APN data yang belum didaftarkan di profil pelanggan UDM/SMF.\n\n💡 *Solusi:* Jangan ganti hardware gNodeB! Cukup samakan string APN di SIM profile dengan database subscriber core network!`,
+    tip_en: `☕ *Telco Espresso: 5GSM Cause #27 Missing DNN*\n\nWhen a handset fails PDU Session Setup and QXDM logs show \`\`\`5GSM Cause #27 (Missing or unknown DNN)\`\`\`, the device is requesting an APN not provisioned in the core UDM/SMF subscriber profile.\n\n💡 *Fix:* Do not troubleshoot gNodeB hardware! Simply align the APN profile string with the core subscriber database!`
+  },
+  {
+    category: 'Radio Protocols',
+    tip_id: `☕ *Telco Espresso: RLF Timers T310 & N310*\n\nRadio Link Failure (RLF) tidak terjadi mendadak! Layer 1 harus melaporkan indikasi *Out-Of-Sync (Qout)* sebanyak *N310 kali* berturut-turut untuk menyalakan timer *T310* (default 1000ms). Jika dalam 1 detik tidak ada *N311 In-Sync*, barulah RLF dideklarasikan dan UE memicu pencarian sel baru via T311.\n\n💡 *Tuning:* Menambah T310 ke 2000ms di area blind-spot highway dapat menurunkan call drop rate!`,
+    tip_en: `☕ *Telco Espresso: RLF Timers T310 & N310*\n\nRadio Link Failure (RLF) is never instantaneous! Layer 1 must report *Out-Of-Sync (Qout)* indications *N310 consecutive times* to start timer *T310* (default 1000ms). If *N311 In-Sync* recovery is not achieved within 1 second, RLF is declared and the UE triggers cell reselection via T311.\n\n💡 *Tuning:* Increasing T310 to 2000ms along highway blind-spots can significantly mitigate call drops!`
+  },
+  {
+    category: 'Project Management (PMP)',
+    tip_id: `☕ *Telco Espresso: Rumus Cepat PTA (FPIF)*\n\nPoint of Total Assumption adalah titik biaya di mana vendor menanggung 100% pembengkakan biaya. Rumus cepatnya: \`\`\`PTA = [(Ceiling Price - Target Price) / Buyer Share Ratio] + Target Cost\`\`\`.\n\n💡 *Insight:* Jika biaya proyek melewati PTA, laba kontraktor tergerus dolar demi dolar hingga plafon habis!`,
+    tip_en: `☕ *Telco Espresso: Quick PTA Formula (FPIF)*\n\nThe Point of Total Assumption is the exact cost where the contractor absorbs 100% of additional cost overruns. Formula: \`\`\`PTA = [(Ceiling Price - Target Price) / Buyer Share Ratio] + Target Cost\`\`\`.\n\n💡 *Insight:* Beyond the PTA, every additional dollar spent comes directly out of vendor profit until the ceiling is breached!`
+  },
+  {
+    category: 'Field & Drive Test',
+    tip_id: `☕ *Telco Espresso: Electrical vs. Mechanical Tilt*\n\nMechanical downtilt menekuk fisik antena ke bawah, tetapi berisiko mendistorsi pola radiasi belakang (*backlobe*) dan merusak coverage di sisi samping (*side-lobes*). Electrical tilt (RET) mengubah fasa sinyal radio secara merata 360 derajat tanpa merusak bentuk lobe.\n\n💡 *Best Practice:* Selalu prioritaskan Remote Electrical Tilt (RET) untuk optimasi halus di lapangan!`,
+    tip_en: `☕ *Telco Espresso: Electrical vs. Mechanical Tilt*\n\nMechanical downtilt physically tilts the antenna bracket, which often distorts backlobes and side coverage patterns. Electrical tilt (RET) adjusts the RF phase uniformly across 360 degrees without degrading horizontal beam symmetry.\n\n💡 *Best Practice:* Always prioritize Remote Electrical Tilt (RET) for fine-grained network optimization!`
+  },
+  {
+    category: 'Data Analytics',
+    tip_id: `☕ *Telco Espresso: DAX Deteksi Sel Hantu (Zero-Traffic)*\n\nDi Power BI, untuk menemukan sel yang aktif namun tidak menyerap trafik pelanggan sama sekali (silent failure), buat measure DAX:\n\`\`\`ZeroTrafficCells = CALCULATE(DISTINCTCOUNT(Cells[CellID]), Cells[TrafficMB] == 0, Cells[AdminState] == "Unlocked")\`\`\`\n\n💡 *Aksi:* Segera jadwalkan tim lapangan untuk memeriksa feeder cable terlepas atau VSWR alarm!`,
+    tip_en: `☕ *Telco Espresso: DAX Ghost Cell Detection*\n\nIn Power BI, to flag silent cell failures that drop zero alarms yet carry zero traffic, write this DAX measure:\n\`\`\`ZeroTrafficCells = CALCULATE(DISTINCTCOUNT(Cells[CellID]), Cells[TrafficMB] == 0, Cells[AdminState] == "Unlocked")\`\`\`\n\n💡 *Action:* Dispatch field riggers immediately to inspect loose feeder connectors or VSWR spikes!`
+  }
+];
+
+export function getRandomEspressoTip(userLang = 'id') {
+  const isEn = userLang === 'en';
+  const tip = TELCO_ESPRESSO_TIPS[Math.floor(Math.random() * TELCO_ESPRESSO_TIPS.length)];
+  return isEn ? tip.tip_en : tip.tip_id;
+}
+
+export function formatLeaderboard(topUsers, userRank, userLang = 'id') {
+  const isEn = userLang === 'en';
+  const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
+  let text = isEn
+    ? `🏆 *TELCOLEARN COMMUNITY LEADERBOARD*\nTop continuous study streaks among telecom peers:\n\n`
+    : `🏆 *PAPAN PERINGKAT KOMUNITAS TELCOLEARN*\nRekor streak belajar tertinggi rekan-rekan engineer:\n\n`;
+
+  if (!topUsers || topUsers.length === 0) {
+    text += isEn
+      ? `_No active streaks recorded yet. Answer a quiz or read a module to claim the #1 spot!_`
+      : `_Belum ada rekor streak aktif. Jawab kuis atau baca modul sekarang untuk merebut posisi #1!_`;
+  } else {
+    topUsers.forEach((u, i) => {
+      const medal = medals[i] || `${i + 1}.`;
+      const rawPhone = u.phone_number || '';
+      const maskedPhone = rawPhone.length > 6
+        ? `${rawPhone.slice(0, 4)}****${rawPhone.slice(-3)}`
+        : (u.display_name || 'Engineer');
+      const trackObj = Object.values(FOCUS_TRACKS).find(t => t.key === u.focus_track);
+      const trackLabel = trackObj?.label?.split(' ')[0] || 'Telco';
+      text += `${medal} *${maskedPhone}* — 🔥 *${u.streak_count} ${isEn ? 'Days' : 'Hari'}* _(${trackLabel})_\n`;
+    });
+  }
+
+  if (userRank) {
+    text += isEn
+      ? `\n────────────────────────\n📍 *Your Standing:* Rank #${userRank.rank} of ${userRank.total} active engineers (Streak: 🔥 *${userRank.streak} Days*)`
+      : `\n────────────────────────\n📍 *Peringkat Anda:* #${userRank.rank} dari ${userRank.total} engineer aktif (Streak: 🔥 *${userRank.streak} Hari*)`;
+  }
+
+  text += isEn
+    ? `\n\n💡 _Type */quiz* to boost your streak or */challenge* to challenge your group!_`
+    : `\n\n💡 _Ketik */quiz* untuk menambah streak Anda atau */tantang* untuk menantang grup Anda!_`;
+
+  return text;
+}
+
+export function formatChallengeMessage(quiz, user, botPhone, userLang = 'id') {
+  const isEn = userLang === 'en';
+  const qText = (isEn && quiz.question_en) ? quiz.question_en : quiz.question;
+  const optA = (isEn && quiz.option_a_en) ? quiz.option_a_en : quiz.option_a;
+  const optB = (isEn && quiz.option_b_en) ? quiz.option_b_en : quiz.option_b;
+  const optC = (isEn && quiz.option_c_en) ? quiz.option_c_en : quiz.option_c;
+  const optD = (isEn && quiz.option_d_en) ? quiz.option_d_en : quiz.option_d;
+
+  const cleanPhone = (botPhone || '').replace(/\D/g, '');
+  const challengeLink = cleanPhone ? `https://wa.me/${cleanPhone}?text=quiz` : `wa.me/TelcoLearn`;
+
+  if (isEn) {
+    return `🎯 *TELECOM BRAIN TEASER CHALLENGE!*
+_Shared by a fellow engineer (Current Streak: 🔥 ${user?.streak_count || 1} Days)_
+
+❓ *Question:*
+${qText}
+
+A. ${optA}
+B. ${optB}
+C. ${optC}
+D. ${optD}
+
+Think you know the answer? Test your telecommunications skills on TelcoLearn Bot:
+👉 *Click to answer & challenge:* ${challengeLink}
+_(Forward this message to your telco WhatsApp groups!)_`;
+  }
+
+  return `🎯 *TANTANGAN KUIS TELEKOMUNIKASI!*
+_Dibagikan oleh rekan engineer (Rekor Streak: 🔥 ${user?.streak_count || 1} Hari)_
+
+❓ *Pertanyaan:*
+${qText}
+
+A. ${optA}
+B. ${optB}
+C. ${optC}
+D. ${optD}
+
+Merasa bisa menjawabnya? Uji pemahaman telco Anda bersama TelcoLearn Bot:
+👉 *Klik untuk menjawab & mengadu streak:* ${challengeLink}
+_(Teruskan pesan ini ke grup WhatsApp rekan kantor/proyek Anda!)_`;
+}
