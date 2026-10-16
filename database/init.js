@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './db.js';
+import { applyBilingualMigrations } from '../scripts/migrate_bilingual.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,6 +69,13 @@ export function initializeDatabase() {
     const kbSeedSql = fs.readFileSync(kbSeedPath, 'utf8');
     db.exec(kbSeedSql);
     console.log('✅ Knowledge Base ShareTechNote (Hybrid RAG) berhasil di-seed.');
+  }
+
+  // 3.5. Jalankan migrasi dan penyemaian konten modul & kuis dwibahasa (Bilingual English)
+  try {
+    applyBilingualMigrations(db);
+  } catch (biErr) {
+    console.warn('ℹ️ Migrasi bilingual modules/quizzes dilewati:', biErr.message);
   }
 
   // 4. Migrasi Kolom Token Tracking & Model Name pada llm_conversation_logs

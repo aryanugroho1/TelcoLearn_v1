@@ -22,7 +22,7 @@ Pedoman Format Keluaran WhatsApp:
 - Output WAJIB menggunakan sintaks teks WhatsApp murni:
   * Gunakan asterisk (*teks*) untuk huruf tebal atau penomoran/subjudul.
   * Gunakan underscore (_teks_) untuk istilah teknis atau penekanan kanal/protokol.
-  * Gunakan triple backticks (\`\`\`kode/log/pesan\`\`\`) untuk cuplikan nama pesan sinyal (misal: \`\`\`RRCConnectionSetup\`\`\`), formula counter, packet ID, atau cause code.
+  * Gunakan format monospace/kode untuk cuplikan nama pesan sinyal (misal: RRCConnectionSetup), formula counter, packet ID, atau cause code.
 - JANGAN gunakan format markdown web yang tidak didukung WhatsApp (hindari '#', '##', dan tabel markdown '|---|' karena akan hancur di layar HP).
 - Untuk Pertanyaan Alur (Call Flow / Signal Acquisition / RACH):
   * Sajikan dalam *Sequence Step-by-Step Berstruktur*: Berikan nomor urut yang rapi (1, 2, 3...) beserta nama kanal radio (PRACH, PDCCH, PDSCH, PBCH) dan fungsi teknis tiap langkah secara padat.
@@ -68,6 +68,48 @@ BATASAN DOMAIN (STRICT TELECOMMUNICATIONS, NETWORKING, & WIRELESS ONLY):
 - JIKA PENGGUNA BERTANYA JELAS-JELAS DI LUAR LINGKUP (seperti resep masakan, politik umum, ramalan zodiak, gosip selebriti, film bioskop, tips pacaran, kesehatan umum tanpa konteks telco, dll.):
   * Anda WAJIB MENOLAK secara sopan dan terarah dalam 1-2 paragraf singkat.
   * Jelaskan bahwa Anda adalah asisten khusus telekomunikasi & jaringan, dan arahkan pengguna untuk menanyakan topik protokol radio 4G/5G, IoT seluler, optimasi RF, KPI vendor, atau analisis log. Jawablah penolakan dalam bahasa yang sesuai dengan bahasa pertanyaan pengguna (Indonesia atau English).`;
+
+export const GEMINI_SYSTEM_INSTRUCTION_EN = `You are a Principal Telecommunications Specialist & Senior Technical Mentor on WhatsApp (TelcoLearn Bot).
+Your knowledge is deeply grounded in 3GPP specifications (Rel-15 through Rel-18), Core Network architecture (5GC SBA / EPC / IMS), the ShareTechNote technical encyclopedia (Jaeku Ryu), and multi-disciplinary telecom industry practices (Core, RAN Optimization, Integration, CEM, and Lab Testing).
+
+Adaptive & Dynamic Chameleon Expert:
+You possess multi-disciplinary expertise and intelligently adapt your perspective (lens), technical depth, and tone based on the user's role and question context:
+1. Core Network & IMS Lens: When discussing 5G Core (AMF, SMF, UPF, PCF, NRF, SBA), 4G EPC (MME, SGW, PGW), IMS, VoLTE/VoNR, SIP, N4/N2/N3/S1 interfaces, and QoS flow (5QI/QCI). Analyze control/user plane architecture and interconnect routing.
+2. RAN Performance & Optimization (RPO) Lens: When discussing OSS KPI formulas (Accessibility, Retainability, Mobility, Integrity/Packet Loss/Drop Rate/Throughput), vendor counters (Nokia NetAct, Ericsson ENM, Huawei U2020/MAE, ZTE), PRB utilization, antenna tilt/azimuth, and cellular radio parameter tuning.
+3. RAN Integration & Commissioning Lens: When discussing new site integration, BBU/RRU/AAU hardware, SFP optical cabling, RET, VSWR/link down alarms, S1/X2/NG/Xn interface commissioning, and site down verification.
+4. O-RAN & Cloud-Native Systems Lens: When discussing O-RAN Alliance architecture, Near-RT RIC & Non-RT RIC, xApps & rApps development, E2 (E2AP/E2SM-KPM/RC), A1, O1 interfaces, O-Cloud, Docker, Kubernetes/CNF orchestration, Helm charts, and Linux troubleshooting.
+5. CEM & SOC Lens: End-to-end QoE, video streaming stall ratio, gaming latency, VoLTE MOS, VIP customer complaints, and network performance correlation with user perception.
+6. Radio Protocol & Signaling Lens: Layer 3 RRC/NAS signaling flows, 3GPP call flows, trace log decoding, cause codes, and radio timers.
+7. Senior Technical Mentor / Work Colleague Lens: When the user asks about real field work issues ('there is an issue on site...', 'troubleshooting...'), give a direct, to-the-point response with an 'Actionable Troubleshooting Checklist'.
+8. Cellular IoT & Wireless: NB-IoT, LTE-M (eMTC/Cat-M1), 5G RedCap, Wi-Fi, Satellite/NTN, coverage enhancement (CE Level), PSM/eDRX.
+9. Machine Learning for Telco Testing & KPI Anomalies (LSTM, Isolation Forest, XGBoost, modem crash triage).
+
+WhatsApp Output Guidelines:
+- Output MUST use pure WhatsApp text typography:
+  * Use asterisks (*text*) for bold.
+  * Use underscores (_text_) for italics/emphasis.
+  * Use code/monospace formatting for signaling message names, counter formulas, packet IDs, or cause codes.
+- Do NOT use markdown web headers ('#', '##') or markdown tables ('|---|').
+- For call flows / sequences: provide a neat, structured step-by-step format (1, 2, 3...) with radio channels (PRACH, PDCCH, PDSCH, PBCH).
+- Provide self-contained explanations directly in WhatsApp without external URLs.
+- Maintain length between 150 to 350 words: dense, comprehensive, and phone-friendly.
+
+NO ROLE DECLARATIONS (NATURAL DIRECT ENTRY):
+- Strictly DO NOT start answers with declarations like 'As a telecom engineer...', 'As an AI...', etc. Begin naturally, warmly, and professionally.
+
+STRICT FACTUALITY & ANTI-HALLUCINATION:
+- Ground all technical explanations in official 3GPP (TS 38.xxx / TS 36.xxx), IETF, or official vendor documentation.
+- NEVER fabricate signaling message names, cause codes, or fake counters.
+
+STRICT SOURCE-AGNOSTIC:
+- NEVER mention "ShareTechNote", "database", "knowledge base", "Gemini", "AI model", "Google", "LLM", or "dataset" in replies!
+
+LANGUAGE REQUIREMENT:
+- You MUST answer 100% in fluent, technically precise ENGLISH.
+- Retain official 3GPP/vendor acronyms (RRC, PRACH, MIB, SIB1, Handover, QXDM, NetAct, ENM) in their standard form.
+
+STRICT DOMAIN SCOPE:
+- Strictly Telecommunications, Cellular IoT, & Computer Networking only. Reject off-scope non-telco queries politely in English.`;
 
 /**
  * Heuristic Pattern Matcher untuk mendeteksi cuplikan log telekomunikasi OTA / Modem
@@ -148,17 +190,27 @@ export function isObviousNonTelcoQuery(text) {
 }
 
 export const FOCUS_TRACKS = {
-  1: { key: 'protocol_qa', label: '4G/5G Protocol QA 📡' },
-  2: { key: 'drive_test', label: 'Field & Drive Test 🚙' },
-  3: { key: 'ml_telco', label: 'ML Telco Testing 🤖' },
-  4: { key: 'log_telco', label: 'Log Analysis 📋' }
+  1: { key: 'protocol_qa', label: '4G/5G Protocol QA 📡', label_en: '4G/5G Protocol QA 📡', label_id: '4G/5G Protocol QA 📡' },
+  2: { key: 'drive_test', label: 'Field & Drive Test 🚙', label_en: 'Field & Drive Test 🚙', label_id: 'Field & Drive Test 🚙' },
+  3: { key: 'ml_telco', label: 'ML Telco Testing 🤖', label_en: 'ML Telco Testing 🤖', label_id: 'ML Telco Testing 🤖' },
+  4: { key: 'log_telco', label: 'Log Analysis 📋', label_en: 'Log Analysis 📋', label_id: 'Log Analysis 📋' }
 };
 
 export const REMINDER_PREFERENCES = {
-  1: { key: 'morning', label: 'Pagi (07:30 WIB) 🌅' },
-  2: { key: 'afternoon', label: 'Siang (12:30 WIB) ☀️' },
-  3: { key: 'all', label: 'Lengkap (Pagi, Siang, Malam) 🚀' }
+  1: { key: 'morning', label: 'Pagi (07:30 WIB) 🌅', label_en: 'Morning (07:30 WIB) 🌅', label_id: 'Pagi (07:30 WIB) 🌅' },
+  2: { key: 'afternoon', label: 'Siang (12:30 WIB) ☀️', label_en: 'Afternoon (12:30 WIB) ☀️', label_id: 'Siang (12:30 WIB) ☀️' },
+  3: { key: 'all', label: 'Lengkap (Pagi, Siang, Malam) 🚀', label_en: 'All (Morning, Afternoon, Night) 🚀', label_id: 'Lengkap (Pagi, Siang, Malam) 🚀' }
 };
+
+export function getLoopbackFooter(userOrLang) {
+  const lang = typeof userOrLang === 'string' ? userOrLang : userOrLang?.preferred_language;
+  if (lang === 'en') {
+    return '\n\n────────────────────────\n☕ Support us: https://saweria.co/TelcoLearn\n💡 _Type */sim* to see diagrams/simulations of this topic, or *0* for main menu._';
+  }
+  return '\n\n────────────────────────\n☕ Dukung kami: https://saweria.co/TelcoLearn\n💡 _Ketik */simulasi* untuk melihat grafik/diagram topik ini, atau *0* untuk menu utama._';
+}
+
+export const LOOPBACK_FOOTER = getLoopbackFooter('id');
 
 export const MESSAGES = {
   WELCOME_LANGUAGE: `👋 *Welcome to TelcoLearn! / Selamat datang di TelcoLearn!*
@@ -313,9 +365,9 @@ TelcoLearn adalah platform micro-learning & asisten AI komprehensif untuk seluru
 
 *Diagnostik AI (Gemini 3 Flash):*
 Cukup ketik atau paste potongan teks log radio seperti:
-\`\`\`RRCConnectionReject waitTime: 16\`\`\`
+RRCConnectionReject waitTime: 16
 atau
-\`\`\`5GMM cause = 11 (PLMN not allowed)\`\`\`
+5GMM cause = 11 (PLMN not allowed)
 Bot akan otomatis mendeteksi pola log dan menyajikan Root Cause Analysis (RCA), dampak pada modem UE, serta langkah pengujian di laboratorium!
 
 ☕ *Dukung Pengembangan TelcoLearn:*
@@ -345,19 +397,30 @@ TelcoLearn is a micro-learning platform & AI technical companion for Telecom & N
 
 *AI Diagnostics (Gemini 3 Flash):*
 Simply paste radio log snippets such as:
-\`\`\`RRCConnectionReject waitTime: 16\`\`\`
+RRCConnectionReject waitTime: 16
 or
-\`\`\`5GMM cause = 11 (PLMN not allowed)\`\`\`
+5GMM cause = 11 (PLMN not allowed)
 The bot will automatically perform Root Cause Analysis (RCA), explain modem behavior, and provide laboratory verification steps!
 
 ☕ *Support TelcoLearn Development:*
 Support us at https://saweria.co/TelcoLearn`,
 
-  NO_MORE_MODULES: `🎉 *Luar Biasa!*
-Anda telah menyelesaikan seluruh modul kurikulum yang tersedia pada track ini. Nantikan modul lanjutan berikutnya atau ketik */quiz* untuk mengulang review soal!`,
+  NO_MORE_MODULES: (user) => {
+    if (user?.preferred_language === 'en') {
+      return MESSAGES.NO_MORE_MODULES_EN;
+    }
+    return `🎉 *Luar Biasa!*
+Anda telah menyelesaikan seluruh modul kurikulum yang tersedia pada track ini. Nantikan modul lanjutan berikutnya atau ketik */quiz* untuk mengulang review soal!`;
+  },
+
+  NO_MORE_MODULES_EN: `🎉 *Outstanding!*
+You have completed all curriculum modules currently available on this track. Stay tuned for future advanced modules or type */quiz* to review interactive quiz questions!`,
 
   LLM_FALLBACK_ERROR: `⚠️ *Maaf, modul analisis AI mengalami kendala teknis sementara.*
 Silakan coba kirimkan kembali potongan log Anda beberapa saat lagi.`,
+
+  LLM_FALLBACK_ERROR_EN: `⚠️ *Sorry, the AI analysis module encountered a temporary issue.*
+Please try submitting your question or log snippet again in a few moments.`,
 
   OUT_OF_SCOPE: `⚠️ *Topik di Luar Lingkup TelcoLearn*
 

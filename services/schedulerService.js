@@ -50,16 +50,23 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
     for (const user of targetUsers) {
       try {
         const nextModule = getNextModuleForUser(user.id);
+        const isEnglishUser = user.preferred_language === 'en';
         if (nextModule) {
-          const header = `⏰ *[TelcoLearn ${slotName === 'morning' ? 'Pagi' : slotName === 'afternoon' ? 'Siang' : 'Malam'}]*\n\n`;
-          const fullMessage = header + nextModule.wa_text_body;
+          const slotLabel = isEnglishUser
+            ? (slotName === 'morning' ? 'Morning' : slotName === 'afternoon' ? 'Afternoon' : 'Evening')
+            : (slotName === 'morning' ? 'Pagi' : slotName === 'afternoon' ? 'Siang' : 'Malam');
+          const header = `⏰ *[TelcoLearn ${slotLabel}]*\n\n`;
+          const moduleBody = (isEnglishUser && nextModule.wa_text_body_en) ? nextModule.wa_text_body_en : nextModule.wa_text_body;
+          const fullMessage = header + moduleBody;
 
           await sendSafeScheduled(sock, user.jid, { text: fullMessage });
           markModuleProgress(user.id, nextModule.id, 'SENT');
           console.log(`📨 [Scheduler] Berhasil mengantrekan modul "${nextModule.module_code}" ke ${user.phone_number}`);
         } else {
           // Jika semua modul sudah selesai, kirim pemicu kuis
-          const quizReminder = `⏰ *[TelcoLearn Review]*\n\nSelamat ${slotName === 'morning' ? 'pagi' : slotName === 'afternoon' ? 'siang' : 'malam'}! Anda telah menyelesaikan materi kurikulum utama. Yuk pertahankan streak Anda hari ini! Ketik */quiz* untuk kuis evaluasi 🚀`;
+          const quizReminder = isEnglishUser
+            ? `⏰ *[TelcoLearn Review]*\n\nGood ${slotName === 'morning' ? 'morning' : slotName === 'afternoon' ? 'afternoon' : 'evening'}! You have completed the main curriculum modules. Keep your streak alive today! Type */quiz* for a 60-second challenge 🚀`
+            : `⏰ *[TelcoLearn Review]*\n\nSelamat ${slotName === 'morning' ? 'pagi' : slotName === 'afternoon' ? 'siang' : 'malam'}! Anda telah menyelesaikan materi kurikulum utama. Yuk pertahankan streak Anda hari ini! Ketik */quiz* untuk kuis evaluasi 🚀`;
           await sendSafeScheduled(sock, user.jid, { text: quizReminder });
         }
 

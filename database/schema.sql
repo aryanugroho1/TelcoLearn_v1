@@ -28,9 +28,12 @@ CREATE TABLE IF NOT EXISTS modules (
     category TEXT NOT NULL,                     -- 'architecture', 'callflow', 'logfile', 'ml'
     level TEXT DEFAULT 'Menengah',              -- 'Dasar', 'Menengah', 'Lanjutan'
     title TEXT NOT NULL,
+    title_en TEXT,
     tags TEXT,                                  -- "RRC,NAS,SBA,AMF"
     summary TEXT NOT NULL,
-    wa_text_body TEXT NOT NULL,                 -- Pesan lengkap terformat tipografi WhatsApp
+    summary_en TEXT,
+    wa_text_body TEXT NOT NULL,                 -- Pesan lengkap terformat tipografi WhatsApp (ID)
+    wa_text_body_en TEXT,                       -- Pesan lengkap terformat tipografi WhatsApp (EN)
     sequence_order INTEGER NOT NULL,            -- Urutan modul harian (1, 2, 3...)
     is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -60,12 +63,18 @@ CREATE TABLE IF NOT EXISTS quizzes (
     module_id INTEGER,
     category TEXT NOT NULL,
     question TEXT NOT NULL,
+    question_en TEXT,
     option_a TEXT NOT NULL,
+    option_a_en TEXT,
     option_b TEXT NOT NULL,
+    option_b_en TEXT,
     option_c TEXT NOT NULL,
+    option_c_en TEXT,
     option_d TEXT NOT NULL,
+    option_d_en TEXT,
     correct_option TEXT NOT NULL,               -- 'A', 'B', 'C', atau 'D'
     explanation TEXT NOT NULL,
+    explanation_en TEXT,
     difficulty INTEGER DEFAULT 2,
     is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

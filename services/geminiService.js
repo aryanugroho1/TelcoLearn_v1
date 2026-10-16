@@ -5,7 +5,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { GEMINI_SYSTEM_INSTRUCTION, MESSAGES } from '../config/constants.js';
+import { GEMINI_SYSTEM_INSTRUCTION, GEMINI_SYSTEM_INSTRUCTION_EN, MESSAGES } from '../config/constants.js';
 import { logLlmConversation, searchKnowledgeBase, getRecentLlmConversation } from '../database/db.js';
 import { getCachedResponse, setCachedResponse } from './cacheService.js';
 
@@ -28,10 +28,13 @@ function getClient() {
 export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_INSTRUCTION, options = {}) {
   const client = getClient();
   if (!client) {
+    const isEn = Boolean(options.isEnglish);
     return {
       success: false,
-      error: 'GEMINI_API_KEY belum dikonfigurasi pada file .env',
-      text: '⚠️ *Kunci API Gemini belum dikonfigurasi.*\nSilakan tambahkan `GEMINI_API_KEY` pada file `.env` di server TelcoLearn.'
+      error: isEn ? 'GEMINI_API_KEY is not configured in .env' : 'GEMINI_API_KEY belum dikonfigurasi pada file .env',
+      text: isEn
+        ? '⚠️ *Gemini API key is not configured.*\nPlease configure `GEMINI_API_KEY` in your `.env` file on the TelcoLearn server.'
+        : '⚠️ *Kunci API Gemini belum dikonfigurasi.*\nSilakan tambahkan `GEMINI_API_KEY` pada file `.env` di server TelcoLearn.'
     };
   }
 
@@ -251,17 +254,31 @@ export async function callGeminiModel(prompt, systemInstruction = GEMINI_SYSTEM_
 /**
  * Menganalisis potongan log radio (QXDM, NAS, RRC, OTA trace)
  */
-export async function analyzeTelcoLog(logSnippet, userId = 0) {
+export async function analyzeTelcoLog(logSnippet, userId = 0, preferredLanguage = 'id') {
   const startTime = Date.now();
 
   // Safeguard Overload: Batasi cuplikan log maksimal 10.000 karakter agar tidak timeout / overload
   let sanitizedLog = logSnippet;
   if (logSnippet && logSnippet.length > 10000) {
     console.log(`✂️ [Log Truncation] Log panjang terdeteksi (${logSnippet.length} char). Mengambil 10.000 karakter terpenting.`);
-    sanitizedLog = logSnippet.slice(0, 10000) + '\n... [Cuplikan log dipotong otomatis agar tidak membebani memori / kuota token]';
+    sanitizedLog = logSnippet.slice(0, 10000) + '\n... [Cuplikan log dipotong otomatis / Log truncated to protect memory]';
   }
 
-  const prompt = `Pelajar mengirimkan cuplikan log protokol radio berikut untuk didiagnosis:
+  const isEnglishLog = preferredLanguage === 'en';
+  const prompt = isEnglishLog
+    ? `The learner submitted the following radio protocol log snippet for diagnosis:
+
+\`\`\`
+${sanitizedLog}
+\`\`\`
+
+Please perform a technical triage using WhatsApp formatting:
+1. *Root Cause Analysis (RCA)*: Why this event/rejection occurred according to 3GPP specifications.
+2. *Impact on UE Behavior*: How the UE modem/software stack reacts (e.g. state transition, timers, FPLMN, fallback).
+3. *Lab Test Verification Steps*: Subsequent log parameters to inspect or lab test verification actions.
+
+Use WhatsApp typography (*bold*, _italic_, \`\`\`code\`\`\`). Do NOT use markdown headers '#' or tables. Must be answered 100% in English.`
+    : `Pelajar mengirimkan cuplikan log protokol radio berikut untuk didiagnosis:
 
 \`\`\`
 ${sanitizedLog}
@@ -274,8 +291,8 @@ Tolong lakukan triage teknis dengan format WhatsApp:
 
 Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan format heading markdown seperti '#' atau tabel.`;
 
-  const isEnglishLog = /\b(analyze|error|reject|cause|failure|log|ue|modem)\b/i.test(logSnippet);
-  const result = await callGeminiModel(prompt, GEMINI_SYSTEM_INSTRUCTION, { isLogAnalysis: true, isEnglish: isEnglishLog });
+  const sysInstruction = isEnglishLog ? GEMINI_SYSTEM_INSTRUCTION_EN : GEMINI_SYSTEM_INSTRUCTION;
+  const result = await callGeminiModel(prompt, sysInstruction, { isLogAnalysis: true, isEnglish: isEnglishLog });
   const latency = Date.now() - startTime;
 
   // Catat ke audit log di SQLite
@@ -287,7 +304,11 @@ Gunakan tipografi WhatsApp (*bold*, _italic_, \`\`\`code\`\`\`). Jangan gunakan 
 
   const latencySec = (latency / 1000).toFixed(1);
   const showTokenStats = process.env.SHOW_TOKEN_STATS === 'true';
-  const tokenStats = showTokenStats ? `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_` : '';
+  const tokenStats = showTokenStats 
+    ? (isEnglishLog 
+        ? `\n\n📊 _Token Usage: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} tokens) | ⏱️ ${latencySec}s_`
+        : `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_`)
+    : '';
   return `${result.text}${tokenStats}`;
 }
 
@@ -376,7 +397,12 @@ export function evaluateConversationContext(question, recentHistory) {
  * Menggunakan Continuous Multi-Turn Context, Smart RAG Gating, dan Draw-Back Capacity Token
  */
 export async function answerGeneralTelcoQuestion(question, userId = 0, options = {}) {
-  const { contextTrack, forceNewTopic = false, forceFollowUp = false } = options;
+  const {
+    contextTrack,
+    preferredLanguage = 'id',
+    forceNewTopic = false,
+    forceFollowUp = false
+  } = options;
   const startTime = Date.now();
 
   // DRAW-BACK CAPACITY TOKEN & TEMPORAL SESSION WINDOW:
@@ -402,9 +428,22 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
 
   // 1.5 DYNAMIC RESPONSE CACHE (PostgreSQL Coolify / SQLite)
   // Cek cache untuk pertanyaan mandiri non-followup
+  // Deteksi eksplisit permintaan ganti bahasa di dalam pesan pertanyaan
+  const lowerQuery = question.toLowerCase();
+  const isExplicitEnglish = /\b(in\s+english\s*(please)?|please\s*in\s*english|translate\s*to\s*english|speak\s*english|switch\s*to\s*english|english\s*version|tolong\s*bahasa\s*inggris|pake\s*bahasa\s*inggris|bahasa\s*inggris\s*dong)\b/i.test(lowerQuery);
+  const isExplicitIndonesian = /\b(bahasa\s*indonesia\s*(aja|dong|please)?|pake\s*bahasa\s*indonesia|tolong\s*bahasa\s*indonesia|dalam\s*bahasa\s*indonesia|terjemahkan\s*ke\s*indonesia|ganti\s*bahasa\s*ke\s*indonesia)\b/i.test(lowerQuery);
+
+  let activeLang = preferredLanguage;
+  if (isExplicitEnglish) {
+    activeLang = 'en';
+  } else if (isExplicitIndonesian) {
+    activeLang = 'id';
+  }
+  const isEnglish = activeLang === 'en';
+
   if (!isConversationalFollowUp) {
     try {
-      const cached = await getCachedResponse(question);
+      const cached = await getCachedResponse(question, activeLang);
       if (cached) {
         const latency = Date.now() - startTime;
         console.log(`⚡ [Cache Hit] '${question.slice(0, 45)}...' ditemukan di cache (${cached.driver}). Menjawab seketika.`);
@@ -471,9 +510,18 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
 Pengguna terindikasi sedang menghadapi studi kasus atau masalah pekerjaan nyata di lapangan/kantor. Berikan jawaban to-the-point dengan 'Actionable Troubleshooting Checklist' yang konkret, terstruktur, dan langsung dapat dicek oleh engineer di sistem/lapangan tanpa menggurui secara textbook.`;
   }
 
-  const languageInstruction = `\n\nKETENTUAN BAHASA (BILINGUAL MANDATORY):
-- Deteksi bahasa pengguna. Jika pengguna bertanya dalam BAHASA INGGRIS atau meminta ("In english please", "speak english", dll), Anda WAJIB menjawab 100% dalam BAHASA INGGRIS (English) yang fasih, profesional, dan mendalam.
-- Jika pengguna bertanya dalam Bahasa Indonesia, jawablah dalam Bahasa Indonesia.`;
+  const languageInstruction = isEnglish
+    ? `\n\nLANGUAGE ENFORCEMENT (STRICT ENGLISH MANDATORY):
+- The user has chosen ENGLISH as their preferred language.
+- You WAJIB (MUST) answer 100% in fluent, technically precise ENGLISH.
+- Retain official 3GPP/vendor acronyms (RRC, PRACH, MIB, SIB1, Beam Failure, Handover, QXDM, NetAct, ENM) in their standard form.
+- Even if technical context contains terms like 'PDU Session', formulate your entire explanation in ENGLISH.
+- Strictly do NOT answer in Indonesian unless explicitly instructed.`
+    : `\n\nKETENTUAN BAHASA (BAHASA INDONESIA):
+- Pengguna memilih BAHASA INDONESIA sebagai preferensi bahasa.
+- Jawablah 100% dalam BAHASA INDONESIA yang profesional, teknis, dan presisi.
+- Pertahankan istilah teknis standar 3GPP/vendor (RRC, PRACH, MIB, SIB1, Beam Failure, Handover, QXDM, NetAct, ENM) dalam ejaan aslinya.
+- Jangan beralih ke Bahasa Inggris kecuali diminta secara eksplisit.`;
 
   // 4. DRAW-BACK CAPACITY TOKEN & MULTI-TURN ISOLATION:
   // Riwayat percakapan HANYA disertakan jika pertanyaan merupakan kelanjutan kontekstual (Follow-up) dari sesi aktif.
@@ -544,8 +592,8 @@ Instruksi Menjawab:
     { role: 'user', parts: [{ text: userTurnText }] }
   ];
 
-  const isEnglishQuestion = /\b(what|how|why|who|when|where|which|can|could|would|should|is|are|do|does|explain|in english|english)\b/i.test(question);
-  const result = await callGeminiModel(multiTurnPayload, GEMINI_SYSTEM_INSTRUCTION, { isLogAnalysis: false, isEnglish: isEnglishQuestion });
+  const sysInstruction = isEnglish ? GEMINI_SYSTEM_INSTRUCTION_EN : GEMINI_SYSTEM_INSTRUCTION;
+  const result = await callGeminiModel(multiTurnPayload, sysInstruction, { isLogAnalysis: false, isEnglish: isEnglish });
   const latency = Date.now() - startTime;
 
   try {
@@ -556,14 +604,18 @@ Instruksi Menjawab:
 
   // Simpan ke Cache jika respon berhasil dan bukan follow-up
   if (result.success && !isConversationalFollowUp && result.text && result.text.length > 50) {
-    setCachedResponse(question, result.text, result.usage || {}).catch(err => {
+    setCachedResponse(question, result.text, result.usage || {}, 24, activeLang).catch(err => {
       console.warn('⚠️ [Cache Save Warning]:', err.message);
     });
   }
 
   const latencySec = (latency / 1000).toFixed(1);
   const showTokenStats = process.env.SHOW_TOKEN_STATS === 'true';
-  const tokenStats = showTokenStats ? `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_` : '';
+  const tokenStats = showTokenStats 
+    ? (isEnglish 
+        ? `\n\n📊 _Token Usage: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} tokens) | ⏱️ ${latencySec}s_`
+        : `\n\n📊 _Konsumsi Token: ${result.usage?.promptTokens || 0} in / ${result.usage?.outputTokens || 0} out (Total: ${result.usage?.totalTokens || 0} token) | ⏱️ ${latencySec}s_`)
+    : '';
   return `${result.text}${tokenStats}`;
 }
 
@@ -571,7 +623,7 @@ Instruksi Menjawab:
  * Menganalisis gambar teknis telekomunikasi (Coverage Heatmap, NetMonster, Nemo, TEMS, Spektrum, Arsitektur)
  * Menggunakan Gemini Multimodal Vision dengan kuantifikasi token granular
  */
-export async function analyzeTelcoImage(imageBuffer, mimeType = 'image/jpeg', caption = '', userId = 0) {
+export async function analyzeTelcoImage(imageBuffer, mimeType = 'image/jpeg', caption = '', userId = 0, preferredLanguage = 'id') {
   const startTime = Date.now();
   const base64Data = imageBuffer.toString('base64');
   const imagePart = {
@@ -616,7 +668,7 @@ Gunakan tipografi WhatsApp murni (*bold*, _italic_, \`\`\`code\`\`\`). Hindari t
 /**
  * Menganalisis file dokumen log telekomunikasi (.txt, .csv, .log, .pcap teks, atau mendeteksi file biner .drm)
  */
-export async function analyzeTelcoDocument(docBuffer, fileName = 'log.txt', mimeType = 'text/plain', caption = '', userId = 0) {
+export async function analyzeTelcoDocument(docBuffer, fileName = 'log.txt', mimeType = 'text/plain', caption = '', userId = 0, preferredLanguage = 'id') {
   const startTime = Date.now();
   const lowerFileName = (fileName || '').toLowerCase();
 

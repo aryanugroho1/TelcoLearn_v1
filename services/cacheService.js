@@ -59,22 +59,23 @@ export function normalizeQuery(query) {
 }
 
 /**
- * Menghitung SHA-256 hash dari query ternormalisasi
+ * Menghitung SHA-256 hash dari query ternormalisasi dengan namespace bahasa
  */
-export function hashQuery(query) {
+export function hashQuery(query, lang = 'id') {
   const normalized = normalizeQuery(query);
-  return crypto.createHash('sha256').update(normalized).digest('hex');
+  const langKey = lang === 'en' ? 'en' : 'id';
+  return crypto.createHash('sha256').update(`${langKey}:${normalized}`).digest('hex');
 }
 
 /**
  * Mengambil respon dari cache (PostgreSQL primary -> SQLite fallback)
  */
-export async function getCachedResponse(query) {
+export async function getCachedResponse(query, lang = 'id') {
   if (!query || typeof query !== 'string') return null;
   const normalized = normalizeQuery(query);
   if (normalized.length < 5) return null; // Jangan cache query terlalu pendek seperti 'halo'
 
-  const queryHash = hashQuery(query);
+  const queryHash = hashQuery(query, lang);
 
   // 1. Coba via PostgreSQL (Coolify db-telcolearn)
   const pool = getPgPool();
@@ -158,7 +159,7 @@ export async function getCachedResponse(query) {
 /**
  * Menyimpan respon jawaban ke cache
  */
-export async function setCachedResponse(query, responseText, usage = {}, ttlHours = 24) {
+export async function setCachedResponse(query, responseText, usage = {}, ttlHours = 24, lang = 'id') {
   if (!query || !responseText) return false;
   const normalized = normalizeQuery(query);
   if (normalized.length < 5) return false;
@@ -168,12 +169,13 @@ export async function setCachedResponse(query, responseText, usage = {}, ttlHour
     responseText.includes('Server AI sedang mengalami antrean') ||
     responseText.includes('The AI server is experiencing high traffic') ||
     responseText.includes('Kunci API Gemini belum dikonfigurasi') ||
+    responseText.includes('Gemini API key is not configured') ||
     responseText.includes('mengalami antrean beban tinggi sementara')
   ) {
     return false;
   }
 
-  const queryHash = hashQuery(query);
+  const queryHash = hashQuery(query, lang);
   const modelName = usage.modelName || 'gemini-flash-lite-latest';
   const pTokens = usage.promptTokens || 0;
   const oTokens = usage.outputTokens || 0;

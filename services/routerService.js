@@ -39,7 +39,8 @@ import {
   REMINDER_PREFERENCES,
   detectTelcoLogPattern,
   isDriveTestInquiry,
-  isObviousNonTelcoQuery
+  isObviousNonTelcoQuery,
+  getLoopbackFooter
 } from '../config/constants.js';
 import {
   analyzeTelcoLog,
@@ -297,15 +298,15 @@ export async function handleIncomingMessage(sock, msg) {
         );
 
         if (!buffer || buffer.length === 0) {
-          await reply({ text: `⚠️ Gagal mengunduh gambar WhatsApp. Silakan kirimkan kembali.${LOOPBACK_FOOTER}` });
+          await reply({ text: `⚠️ Gagal mengunduh gambar WhatsApp. Silakan kirimkan kembali.${getLoopbackFooter(user)}` });
           return;
         }
 
         const visionAnalysis = await analyzeTelcoImage(buffer, mimeType, caption, user.id);
-        await reply({ text: `${visionAnalysis}${LOOPBACK_FOOTER}` });
+        await reply({ text: `${visionAnalysis}${getLoopbackFooter(user)}` });
       } catch (mediaErr) {
         console.error('❌ Gagal memproses gambar:', mediaErr);
-        await reply({ text: `⚠️ Maaf, terjadi kendala saat mengunduh atau menganalisis gambar. Silakan coba kembali.${LOOPBACK_FOOTER}` });
+        await reply({ text: `⚠️ Maaf, terjadi kendala saat mengunduh atau menganalisis gambar. Silakan coba kembali.${getLoopbackFooter(user)}` });
       }
       return;
     }
@@ -331,15 +332,15 @@ export async function handleIncomingMessage(sock, msg) {
         );
 
         if (!buffer || buffer.length === 0) {
-          await reply({ text: `⚠️ Gagal mengunduh dokumen WhatsApp. Silakan kirimkan kembali.${LOOPBACK_FOOTER}` });
+          await reply({ text: `⚠️ Gagal mengunduh dokumen WhatsApp. Silakan kirimkan kembali.${getLoopbackFooter(user)}` });
           return;
         }
 
         const docAnalysis = await analyzeTelcoDocument(buffer, fileName, mimeType, caption, user.id);
-        await reply({ text: `${docAnalysis}${LOOPBACK_FOOTER}` });
+        await reply({ text: `${docAnalysis}${getLoopbackFooter(user)}` });
       } catch (mediaErr) {
         console.error('❌ Gagal memproses dokumen:', mediaErr);
-        await reply({ text: `⚠️ Maaf, terjadi kendala saat mengunduh atau membaca dokumen log. Silakan coba kembali.${LOOPBACK_FOOTER}` });
+        await reply({ text: `⚠️ Maaf, terjadi kendala saat mengunduh atau membaca dokumen log. Silakan coba kembali.${getLoopbackFooter(user)}` });
       }
       return;
     }
@@ -347,8 +348,12 @@ export async function handleIncomingMessage(sock, msg) {
     const currentState = user.current_state || 'IDLE';
 
     // 2. GREETING & ONBOARDING INITIAL TRIGGER
-    // Ketika pengguna mengirimkan halo atau pesan pembuka, mulai dari pemilihan bahasa (Bilingual)
     if (isGreeting) {
+      if (user.current_state === 'IDLE') {
+        // Pengguna lama yang sudah selesai onboarding disapa kembali dengan menu utama
+        await reply({ text: MESSAGES.MAIN_MENU(user) });
+        return;
+      }
       console.log(`👋 [Greeting] Pengguna ${user.jid} mengirimkan salam "${rawText}". Mengarahkan ke ONBOARDING_LANG.`);
       updateUserState(user.jid, 'ONBOARDING_LANG', null);
       await reply({ text: MESSAGES.WELCOME_LANGUAGE });
@@ -406,16 +411,29 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
 
     // 3. STATE: ONBOARDING_TRACK (Memilih 1, 2, 3, atau 4)
     if (currentState === 'ONBOARDING_TRACK') {
-      const choice = rawText.trim();
+      const choice = rawText.trim().toLowerCase();
       const isEnglishUser = user.preferred_language === 'en';
+
+      let selected = null;
       if (['1', '2', '3', '4'].includes(choice)) {
-        const selected = FOCUS_TRACKS[choice];
+        selected = FOCUS_TRACKS[choice];
+      } else if (/^1\b|protocol|4g.*5g|qa/i.test(choice)) {
+        selected = FOCUS_TRACKS['1'];
+      } else if (/^2\b|drive.*test|field|drivetest/i.test(choice)) {
+        selected = FOCUS_TRACKS['2'];
+      } else if (/^3\b|ml|machine.*learning|analytics/i.test(choice)) {
+        selected = FOCUS_TRACKS['3'];
+      } else if (/^4\b|log|troubleshoot/i.test(choice)) {
+        selected = FOCUS_TRACKS['4'];
+      }
+
+      if (selected) {
         updateUserPreferences(user.jid, { focus_track: selected.key });
         updateUserState(user.jid, 'IDLE', null);
         user.focus_track = selected.key;
         const ackMsg = isEnglishUser
-          ? `${MESSAGES.ONBOARDING_ACK_EN(selected.label)}${LOOPBACK_FOOTER}`
-          : `${MESSAGES.ONBOARDING_ACK_ID(selected.label)}${LOOPBACK_FOOTER}`;
+          ? `${MESSAGES.ONBOARDING_ACK_EN(selected.label)}${getLoopbackFooter(user)}`
+          : `${MESSAGES.ONBOARDING_ACK_ID(selected.label)}${getLoopbackFooter(user)}`;
         await reply({ text: ackMsg });
         return;
       } else if (['0', '/menu', 'menu', 'kembali'].includes(choice)) {
@@ -430,7 +448,6 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
         return;
       } else {
         // User langsung mengetik pertanyaan teknis bebas / slash command:
-        // Auto-complete onboarding ke IDLE agar tidak memblokir user
         console.log(`⏩ [Auto-Bypass Onboarding Track] User ${user.jid} mengirim "${rawText}", auto-complete onboarding ke IDLE.`);
         updateUserPreferences(user.jid, { focus_track: 'protocol_qa', reminder_preference: 'all' });
         updateUserState(user.jid, 'IDLE', null);
@@ -440,9 +457,13 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
 
     // 4. STATE: AWAITING_DRIVETEST_CONFIRM (Konfirmasi apakah konteksnya Drivetest)
     if (currentState === 'AWAITING_DRIVETEST_CONFIRM') {
-      if (['0', '/menu', 'menu', 'kembali', 'home', '/batal', 'batal'].includes(lowerText)) {
+      const isEnglishUser = user.preferred_language === 'en';
+      if (['0', '/menu', 'menu', 'kembali', 'home', '/batal', 'batal', '/cancel', 'cancel'].includes(lowerText)) {
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `❌ *Konfirmasi dibatalkan.* Kembali ke menu utama:\n\n${MESSAGES.MAIN_MENU(user)}` });
+        const cancelMsg = isEnglishUser
+          ? `❌ *Confirmation cancelled.* Returning to main menu:\n\n${MESSAGES.MAIN_MENU(user)}`
+          : `❌ *Konfirmasi dibatalkan.* Kembali ke menu utama:\n\n${MESSAGES.MAIN_MENU(user)}`;
+        await reply({ text: cancelMsg });
         return;
       }
 
@@ -454,7 +475,10 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
 
       if (!pendingQuestion) {
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `Sesi konfirmasi kedaluwarsa. Silakan ajukan pertanyaan Anda kembali.${LOOPBACK_FOOTER}` });
+        const expireMsg = isEnglishUser
+          ? `Confirmation session expired. Please re-submit your question.${getLoopbackFooter(user)}`
+          : `Sesi konfirmasi kedaluwarsa. Silakan ajukan pertanyaan Anda kembali.${getLoopbackFooter(user)}`;
+        await reply({ text: expireMsg });
         return;
       }
 
@@ -463,25 +487,38 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
 
       if (yesRegex.test(lowerText)) {
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `👍 *Baik, pertanyaan Anda dijawab dalam konteks Field & Drive Test 🚙:*` });
-        const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, { contextTrack: 'drive_test' });
-        await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
+        const ack = isEnglishUser
+          ? `👍 *Understood, answering in the context of Field & Drive Test 🚙:*`
+          : `👍 *Baik, pertanyaan Anda dijawab dalam konteks Field & Drive Test 🚙:*`;
+        await reply({ text: ack });
+        const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
+          contextTrack: 'drive_test',
+          preferredLanguage: user.preferred_language
+        });
+        await reply({ text: `${answer}${getLoopbackFooter(user)}` });
         return;
       } else if (noRegex.test(lowerText)) {
         updateUserState(user.jid, 'IDLE', null);
         const trackLabel = FOCUS_TRACKS[Object.keys(FOCUS_TRACKS).find(k => FOCUS_TRACKS[k].key === user.focus_track)]?.label || 'Protocol QA';
-        await reply({ text: `👍 *Baik, pertanyaan Anda dijawab dalam konteks ${trackLabel}:*` });
-        const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, { contextTrack: user.focus_track });
-        await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
+        const ack = isEnglishUser
+          ? `👍 *Understood, answering in the context of ${trackLabel}:*`
+          : `👍 *Baik, pertanyaan Anda dijawab dalam konteks ${trackLabel}:*`;
+        await reply({ text: ack });
+        const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
+          contextTrack: user.focus_track,
+          preferredLanguage: user.preferred_language
+        });
+        await reply({ text: `${answer}${getLoopbackFooter(user)}` });
         return;
       } else {
         if (lowerText.startsWith('/')) {
           updateUserState(user.jid, 'IDLE', null);
           // Lanjut ke handler slash command di bawah
         } else {
-          await reply({
-            text: `⚠️ Mohon konfirmasi dengan menjawab *Ya* atau *Tidak*:\n\n*Apakah ini konteksnya Drivetest?*\n_"${pendingQuestion}"_\n\n_(Ketik *0* untuk kembali ke menu utama)_`
-          });
+          const prompt = isEnglishUser
+            ? `⚠️ Please confirm by replying *Yes* or *No*:\n\n*Is this inquiry related to Drive Testing?*\n_"${pendingQuestion}"_\n\n_(Type *0* to return to main menu)_`
+            : `⚠️ Mohon konfirmasi dengan menjawab *Ya* atau *Tidak*:\n\n*Apakah ini konteksnya Drivetest?*\n_"${pendingQuestion}"_\n\n_(Ketik *0* untuk kembali ke menu utama)_`;
+          await reply({ text: prompt });
           return;
         }
       }
@@ -505,41 +542,51 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
 
       if (!pendingQuestion) {
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `Sesi konfirmasi kedaluwarsa. Silakan ajukan pertanyaan Anda kembali.${LOOPBACK_FOOTER}` });
+        await reply({ text: `Sesi konfirmasi kedaluwarsa. Silakan ajukan pertanyaan Anda kembali.${getLoopbackFooter(user)}` });
         return;
       }
 
       const isNewTopicChoice = /^(1|baru|topik baru|new|new topic|bukan|beda|ganti topik|topik lain)$/i.test(lowerText.trim());
       const isRelatedChoice = /^(2|terkait|masih terkait|lanjut|lanjutan|sambung|ya|yes|betul|benar|sama)$/i.test(lowerText.trim());
 
+      const isEnglishUser = user.preferred_language === 'en';
       if (isNewTopicChoice) {
         // Bersihkan memori percakapan lama agar tidak tercampur
         clearLlmConversation(user.id);
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `🆕 *Memulai Topik Baru:* Menganalisis tanpa riwayat sebelumnya...` });
+        const startMsg = isEnglishUser
+          ? `🆕 *Starting New Topic:* Analyzing without previous context...`
+          : `🆕 *Memulai Topik Baru:* Menganalisis tanpa riwayat sebelumnya...`;
+        await reply({ text: startMsg });
         const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
           contextTrack: user.focus_track,
+          preferredLanguage: user.preferred_language,
           forceNewTopic: true
         });
-        await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
+        await reply({ text: `${answer}${getLoopbackFooter(user)}` });
         return;
       } else if (isRelatedChoice) {
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `🔗 *Melanjutkan Pembahasan:* Menghubungkan dengan konteks sebelumnya...` });
+        const contMsg = isEnglishUser
+          ? `🔗 *Continuing Discussion:* Connecting with previous context...`
+          : `🔗 *Melanjutkan Pembahasan:* Menghubungkan dengan konteks sebelumnya...`;
+        await reply({ text: contMsg });
         const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
           contextTrack: user.focus_track,
+          preferredLanguage: user.preferred_language,
           forceFollowUp: true
         });
-        await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
+        await reply({ text: `${answer}${getLoopbackFooter(user)}` });
         return;
       } else {
         if (lowerText.startsWith('/')) {
           updateUserState(user.jid, 'IDLE', null);
           // Lanjut ke handler slash command di bawah
         } else {
-          await reply({
-            text: `⚠️ Mohon konfirmasi dengan memilih angka *1* atau *2*:\n\n1️⃣ *Topik Baru* (Mulai pembahasan baru)\n2️⃣ *Masih Terkait* (Lanjutan dari pembahasan tadi)\n\n_(Ketik *0* untuk membatalkan)_`
-          });
+          const prompt = isEnglishUser
+            ? `⚠️ Please choose option *1* or *2*:\n\n1️⃣ *New Topic* (Start fresh topic)\n2️⃣ *Still Related* (Follow-up to previous discussion)\n\n_(Type *0* to cancel)_`
+            : `⚠️ Mohon konfirmasi dengan memilih angka *1* atau *2*:\n\n1️⃣ *Topik Baru* (Mulai pembahasan baru)\n2️⃣ *Masih Terkait* (Lanjutan dari pembahasan tadi)\n\n_(Ketik *0* untuk membatalkan)_`;
+          await reply({ text: prompt });
           return;
         }
       }
@@ -555,22 +602,36 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
         console.error('Error parsing state_payload:', e);
       }
 
+      const isEnglishUser = user.preferred_language === 'en';
+
       if (!activeQuizId) {
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `Sesi kuis kedaluwarsa. Ketik */quiz* (atau *2*) untuk kuis baru.${LOOPBACK_FOOTER}` });
+        await reply({
+          text: isEnglishUser
+            ? `Quiz session expired. Type */quiz* (or *2*) for a new quiz.${getLoopbackFooter(user)}`
+            : `Sesi kuis kedaluwarsa. Ketik */quiz* (atau *2*) untuk kuis baru.${getLoopbackFooter(user)}`
+        });
         return;
       }
 
       const quiz = getQuizById(activeQuizId);
       if (!quiz) {
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `Kuis tidak ditemukan. Ketik */quiz* (atau *2*) untuk kuis baru.${LOOPBACK_FOOTER}` });
+        await reply({
+          text: isEnglishUser
+            ? `Quiz not found. Type */quiz* (or *2*) for a new quiz.${getLoopbackFooter(user)}`
+            : `Kuis tidak ditemukan. Ketik */quiz* (atau *2*) untuk kuis baru.${getLoopbackFooter(user)}`
+        });
         return;
       }
 
       if (lowerText === '/batal' || lowerText === '/cancel' || lowerText === 'batal' || lowerText === 'cancel' || lowerText === '0' || lowerText === '/menu' || lowerText === 'menu' || lowerText === 'kembali') {
         updateUserState(user.jid, 'IDLE', null);
-        await reply({ text: `❌ *Kuis dibatalkan.* Kembali ke menu utama:\n\n${MESSAGES.MAIN_MENU(user)}` });
+        await reply({
+          text: isEnglishUser
+            ? `❌ *Quiz cancelled.* Returning to main menu:\n\n${MESSAGES.MAIN_MENU(user)}`
+            : `❌ *Kuis dibatalkan.* Kembali ke menu utama:\n\n${MESSAGES.MAIN_MENU(user)}`
+        });
         return;
       }
 
@@ -580,7 +641,9 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
 
       if (!['A', 'B', 'C', 'D'].includes(selectedOption)) {
         await reply({
-          text: `⚠️ Mohon jawab dengan pilihan huruf *A*, *B*, *C*, atau *D*! (atau ketik *0* / */batal* untuk kembali ke menu utama)`
+          text: isEnglishUser
+            ? `⚠️ Please reply with option *A*, *B*, *C*, or *D*! (or type *0* / */cancel* to return to main menu)`
+            : `⚠️ Mohon jawab dengan pilihan huruf *A*, *B*, *C*, atau *D*! (atau ketik *0* / */batal* untuk kembali ke menu utama)`
         });
         return;
       }
@@ -589,26 +652,17 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
       recordQuizLog(user.id, quiz.id, selectedOption, isCorrect);
       const newStreak = updateUserStreak(user.jid, isCorrect);
       updateUserState(user.jid, 'IDLE', null);
+      const explText = (isEnglishUser && quiz.explanation_en) ? quiz.explanation_en : quiz.explanation;
 
       if (isCorrect) {
-        const responseText = `🎉 *Tepat Sekali! (Jawaban ${quiz.correct_option})*
-
-📊 *Penjelasan Teknis:*
-${quiz.explanation}
-
-🏆 *Streak Anda bertambah:* *🔥 ${newStreak} Hari Belajar Berturut-turut!*
-
-Ketik */belajar* (atau *1*) untuk materi selanjutnya atau */quiz* (atau *2*) untuk tantangan berikutnya!${LOOPBACK_FOOTER}`;
+        const responseText = isEnglishUser
+          ? `🎉 *Spot On! (Answer ${quiz.correct_option})*\n\n📊 *Technical Explanation:*\n${explText}\n\n🏆 *Your streak increased:* *🔥 ${newStreak} Consecutive Days of Learning!*\n\nType */learn* (or *1*) for the next module or */quiz* (or *2*) for another challenge!${getLoopbackFooter(user)}`
+          : `🎉 *Tepat Sekali! (Jawaban ${quiz.correct_option})*\n\n📊 *Penjelasan Teknis:*\n${explText}\n\n🏆 *Streak Anda bertambah:* *🔥 ${newStreak} Hari Belajar Berturut-turut!*\n\nKetik */belajar* (atau *1*) untuk materi selanjutnya atau */quiz* (atau *2*) untuk tantangan berikutnya!${getLoopbackFooter(user)}`;
         await reply({ text: responseText });
       } else {
-        const responseText = `❌ *Jawaban Kurang Tepat!*
-Jawaban yang benar adalah *${quiz.correct_option}*.
-
-📊 *Penjelasan Teknis:*
-${quiz.explanation}
-
-💪 Jangan patah semangat! Rekor streak Anda saat ini: *🔥 ${user.streak_count || 0} Hari*.
-Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
+        const responseText = isEnglishUser
+          ? `❌ *Not Quite Right!*\nThe correct answer is *${quiz.correct_option}*.\n\n📊 *Technical Explanation:*\n${explText}\n\n💪 Keep going! Your current streak: *🔥 ${user.streak_count || 0} Days*.\nType */quiz* (or *2*) to practice another topic!${getLoopbackFooter(user)}`
+          : `❌ *Jawaban Kurang Tepat!*\nJawaban yang benar adalah *${quiz.correct_option}*.\n\n📊 *Penjelasan Teknis:*\n${explText}\n\n💪 Jangan patah semangat! Rekor streak Anda saat ini: *🔥 ${user.streak_count || 0} Hari*.\nKetik */quiz* (atau *2*) untuk melatih topik lain!${getLoopbackFooter(user)}`;
         await reply({ text: responseText });
       }
       return;
@@ -624,7 +678,7 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
       saveUserNote(user.id, 'Catatan Belajar', rawText, 'note');
       updateUserState(user.jid, 'IDLE', null);
       await reply({
-        text: `📝 *Catatan Berhasil Disimpan!*\n\n_"${rawText}"_${LOOPBACK_FOOTER}`
+        text: `📝 *Catatan Berhasil Disimpan!*\n\n_"${rawText}"_${getLoopbackFooter(user)}`
       });
       return;
     }
@@ -644,7 +698,7 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
       updateUserState(user.jid, 'IDLE', null);
 
       await reply({
-        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn (Tiket *#${fbId || 'BARU'}*):\n_"${rawText}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya. Tetap semangat belajar! 🚀${LOOPBACK_FOOTER}`
+        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn (Tiket *#${fbId || 'BARU'}*):\n_"${rawText}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya. Tetap semangat belajar! 🚀${getLoopbackFooter(user)}`
       });
       return;
     }
@@ -661,7 +715,29 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
       clearLlmConversation(user.id);
       updateUserState(user.jid, 'IDLE', null);
       await reply({
-        text: `🧹 *Topik Diskusi Berhasil Direset!*\nRiwayat percakapan sebelumnya telah dibersihkan.\n\nSilakan ajukan pertanyaan atau topik baru Anda!${LOOPBACK_FOOTER}`
+        text: `🧹 *Topik Diskusi Berhasil Direset!*\nRiwayat percakapan sebelumnya telah dibersihkan.\n\nSilakan ajukan pertanyaan atau topik baru Anda!${getLoopbackFooter(user)}`
+      });
+      return;
+    }
+
+    // Deteksi permintaan ganti bahasa alami di tengah percakapan
+    const isNaturalEnglishSwitch = /\b(switch\s*to\s*english|change\s*(language\s*)?to\s*english|speak\s*in?\s*english|in\s*english\s*please|use\s*english|english\s*please|can\s*we\s*use\s*english|ganti\s*ke\s*bahasa\s*inggris|pake\s*bahasa\s*inggris)\b/i.test(lowerText);
+    const isNaturalIndonesianSwitch = /\b(ganti\s*(bahasa\s*)?ke\s*indonesia|switch\s*to\s*indonesian?|speak\s*in?\s*indonesian?|pakai\s*bahasa\s*indonesia|bahasa\s*indonesia\s*aja|bahasa\s*indonesia\s*dong)\b/i.test(lowerText);
+
+    if (isNaturalEnglishSwitch) {
+      updateUserPreferences(user.jid, { preferred_language: 'en' });
+      user.preferred_language = 'en';
+      await reply({
+        text: `🌐 *Language updated to English 🇬🇧.*\nAll future menus, lessons, quizzes, and responses will be delivered in English.\n_(Type */lang id* anytime to switch back to Bahasa Indonesia)_${getLoopbackFooter('en')}`
+      });
+      return;
+    }
+
+    if (isNaturalIndonesianSwitch) {
+      updateUserPreferences(user.jid, { preferred_language: 'id' });
+      user.preferred_language = 'id';
+      await reply({
+        text: `🌐 *Bahasa dialihkan ke Bahasa Indonesia 🇮🇩.*\nSeluruh menu, modul belajar, kuis, dan jawaban selanjutnya akan disajikan dalam Bahasa Indonesia.\n_(Ketik */lang en* kapan saja untuk beralih ke Bahasa Inggris)_${getLoopbackFooter('id')}`
       });
       return;
     }
@@ -675,7 +751,7 @@ Ketik */quiz* (atau *2*) untuk melatih topik lain!${LOOPBACK_FOOTER}`;
         await reply({
           text: `🌐 *Language updated to English 🇬🇧.*
 All future menus, quizzes, and automated reminders will be delivered in English.
-_(Type */lang id* anytime to switch back to Bahasa Indonesia)_${LOOPBACK_FOOTER}`
+_(Type */lang id* anytime to switch back to Bahasa Indonesia)_${getLoopbackFooter(user)}`
         });
         return;
       } else if (['id', 'indonesia', 'indo', 'bahasa', '1'].includes(arg)) {
@@ -684,7 +760,7 @@ _(Type */lang id* anytime to switch back to Bahasa Indonesia)_${LOOPBACK_FOOTER}
         await reply({
           text: `🌐 *Bahasa diubah ke Bahasa Indonesia 🇮🇩.*
 Menu, materi, dan pengingat harian Anda akan disajikan dalam Bahasa Indonesia.
-_(Ketik */lang en* kapan saja untuk beralih ke Bahasa Inggris)_${LOOPBACK_FOOTER}`
+_(Ketik */lang en* kapan saja untuk beralih ke Bahasa Inggris)_${getLoopbackFooter(user)}`
         });
         return;
       } else {
@@ -695,7 +771,7 @@ Silakan pilih bahasa yang Anda inginkan / Choose your language:
 1️⃣ *Bahasa Indonesia* 🇮🇩 (Ketik */lang id*)
 2️⃣ *English* 🇬🇧 (Type */lang en*)
 
-Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Bahasa Indonesia 🇮🇩'}*${LOOPBACK_FOOTER}`
+Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Bahasa Indonesia 🇮🇩'}*${getLoopbackFooter(user)}`
         });
         return;
       }
@@ -709,13 +785,13 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
         updateUserPreferences(user.jid, { focus_track: selected.key });
         user.focus_track = selected.key;
         const ack = isEnglishUser
-          ? `✅ *Your study track has been updated to:* ${selected.label}${LOOPBACK_FOOTER}`
-          : `✅ *Jalur fokus belajar Anda diubah menjadi:* ${selected.label}${LOOPBACK_FOOTER}`;
+          ? `✅ *Your study track has been updated to:* ${selected.label}${getLoopbackFooter(user)}`
+          : `✅ *Jalur fokus belajar Anda diubah menjadi:* ${selected.label}${getLoopbackFooter(user)}`;
         await reply({ text: ack });
       } else {
         const prompt = isEnglishUser
-          ? `🎯 *SELECT STUDY TRACK:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Type */track 1*, */track 2*, */track 3*, or */track 4*_${LOOPBACK_FOOTER}`
-          : `🎯 *PILIH JALUR FOKUS BELAJAR:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Ketik */track 1*, */track 2*, */track 3*, atau */track 4*_${LOOPBACK_FOOTER}`;
+          ? `🎯 *SELECT STUDY TRACK:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Type */track 1*, */track 2*, */track 3*, or */track 4*_${getLoopbackFooter(user)}`
+          : `🎯 *PILIH JALUR FOKUS BELAJAR:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Ketik */track 1*, */track 2*, */track 3*, atau */track 4*_${getLoopbackFooter(user)}`;
         await reply({ text: prompt });
       }
       return;
@@ -729,13 +805,13 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
         updateUserPreferences(user.jid, { reminder_preference: selected.key });
         user.reminder_preference = selected.key;
         const ack = isEnglishUser
-          ? `✅ *Your daily notification schedule is set to:* ${selected.label}${LOOPBACK_FOOTER}`
-          : `✅ *Jadwal notifikasi Anda diubah menjadi:* ${selected.label}${LOOPBACK_FOOTER}`;
+          ? `✅ *Your daily notification schedule is set to:* ${selected.label}${getLoopbackFooter(user)}`
+          : `✅ *Jadwal notifikasi Anda diubah menjadi:* ${selected.label}${getLoopbackFooter(user)}`;
         await reply({ text: ack });
       } else {
         const prompt = isEnglishUser
-          ? `⏰ *CHOOSE DAILY REMINDER SCHEDULE:*\n\n1️⃣ Morning (07:30 WIB)\n2️⃣ Afternoon (12:30 WIB)\n3️⃣ All (Morning, Afternoon, Night)\n\n_Type */schedule 1*, */schedule 2*, or */schedule 3*_${LOOPBACK_FOOTER}`
-          : `⏰ *PILIH JADWAL NOTIFIKASI HARIAN:*\n\n1️⃣ Pagi (07:30 WIB)\n2️⃣ Siang (12:30 WIB)\n3️⃣ Lengkap (Pagi, Siang, Malam)\n\n_Ketik */jadwal 1*, */jadwal 2*, atau */jadwal 3*_${LOOPBACK_FOOTER}`;
+          ? `⏰ *CHOOSE DAILY REMINDER SCHEDULE:*\n\n1️⃣ Morning (07:30 WIB)\n2️⃣ Afternoon (12:30 WIB)\n3️⃣ All (Morning, Afternoon, Night)\n\n_Type */schedule 1*, */schedule 2*, or */schedule 3*_${getLoopbackFooter(user)}`
+          : `⏰ *PILIH JADWAL NOTIFIKASI HARIAN:*\n\n1️⃣ Pagi (07:30 WIB)\n2️⃣ Siang (12:30 WIB)\n3️⃣ Lengkap (Pagi, Siang, Malam)\n\n_Ketik */jadwal 1*, */jadwal 2*, atau */jadwal 3*_${getLoopbackFooter(user)}`;
         await reply({ text: prompt });
       }
       return;
@@ -743,15 +819,17 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
 
     // Shortcut 1 -> /belajar atau /learn
     if (lowerText === '/belajar' || lowerText === 'belajar' || lowerText === '/learn' || lowerText === 'learn' || lowerText === '1') {
+      const isEnglishUser = user.preferred_language === 'en';
       const nextModule = getNextModuleForUser(user.id);
       if (!nextModule) {
-        await reply({ text: `${MESSAGES.NO_MORE_MODULES}${LOOPBACK_FOOTER}` });
+        await reply({ text: `${MESSAGES.NO_MORE_MODULES(user)}${getLoopbackFooter(user)}` });
         return;
       }
 
       markModuleProgress(user.id, nextModule.id, 'SENT');
       updateUserState(user.jid, 'IDLE', { last_module_id: nextModule.id });
-      await reply({ text: `${nextModule.wa_text_body}${LOOPBACK_FOOTER}` });
+      const moduleBody = (isEnglishUser && nextModule.wa_text_body_en) ? nextModule.wa_text_body_en : nextModule.wa_text_body;
+      await reply({ text: `${moduleBody}${getLoopbackFooter(user)}` });
       return;
     }
 
@@ -766,23 +844,22 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
       const quiz = getNextQuizForUser(user.id, preferredModuleId);
       if (!quiz) {
         await reply({
-          text: `Belum ada kuis yang tersedia untuk modul ini. Ketik */belajar* (atau *1*) untuk melanjutkan materi.${LOOPBACK_FOOTER}`
+          text: `Belum ada kuis yang tersedia untuk modul ini. Ketik */belajar* (atau *1*) untuk melanjutkan materi.${getLoopbackFooter(user)}`
         });
         return;
       }
 
+      const isEnglishUser = user.preferred_language === 'en';
       updateUserState(user.jid, 'AWAITING_QUIZ_ANSWER', { active_quiz_id: quiz.id });
-      const quizPrompt = `🌙 *Waktunya Kuis 60 Detik! (Streak Anda: 🔥 ${user.streak_count || 0} Hari)*
+      const qText = (isEnglishUser && quiz.question_en) ? quiz.question_en : quiz.question;
+      const optA = (isEnglishUser && quiz.option_a_en) ? quiz.option_a_en : quiz.option_a;
+      const optB = (isEnglishUser && quiz.option_b_en) ? quiz.option_b_en : quiz.option_b;
+      const optC = (isEnglishUser && quiz.option_c_en) ? quiz.option_c_en : quiz.option_c;
+      const optD = (isEnglishUser && quiz.option_d_en) ? quiz.option_d_en : quiz.option_d;
 
-❓ *Pertanyaan:*
-${quiz.question}
-
-A. ${quiz.option_a}
-B. ${quiz.option_b}
-C. ${quiz.option_c}
-D. ${quiz.option_d}
-
-_(Balas dengan huruf A, B, C, atau D. Ketik *0* atau */batal* untuk kembali ke menu utama)_`;
+      const quizPrompt = isEnglishUser
+        ? `🌙 *60-Second Quiz Time! (Your Streak: 🔥 ${user.streak_count || 0} Days)*\n\n❓ *Question:*\n${qText}\n\nA. ${optA}\nB. ${optB}\nC. ${optC}\nD. ${optD}\n\n_(Reply with letter A, B, C, or D. Type *0* or */cancel* to return to main menu)_`
+        : `🌙 *Waktunya Kuis 60 Detik! (Streak Anda: 🔥 ${user.streak_count || 0} Hari)*\n\n❓ *Pertanyaan:*\n${qText}\n\nA. ${optA}\nB. ${optB}\nC. ${optC}\nD. ${optD}\n\n_(Balas dengan huruf A, B, C, atau D. Ketik *0* atau */batal* untuk kembali ke menu utama)_`;
 
       await reply({ text: quizPrompt });
       return;
@@ -790,19 +867,14 @@ _(Balas dengan huruf A, B, C, atau D. Ketik *0* atau */batal* untuk kembali ke m
 
     // Shortcut 3 -> /streak
     if (lowerText === '/streak' || lowerText === 'streak' || lowerText === '3') {
+      const isEnglishUser = user.preferred_language === 'en';
       const db = getDb();
       const completedModules = db.prepare("SELECT COUNT(*) as count FROM user_module_progress WHERE user_id = ? AND status = 'COMPLETED'").get(user.id).count;
       const totalQuizzes = db.prepare('SELECT COUNT(*) as count FROM quiz_logs WHERE user_id = ? AND is_correct = 1').get(user.id).count;
 
-      const streakText = `🔥 *KONSISTENSI & STATISTIK BELAJAR*
-Halo, *${user.display_name}*!
-
-• *Current Streak:* 🔥 *${user.streak_count || 0} Hari Berturut-turut*
-• *Terakhir Aktif:* ${user.last_active_date || 'Hari ini'}
-• *Kuis Terjawab Benar:* 🎯 ${totalQuizzes} Soal
-• *Modul Diselesaikan:* 📚 ${completedModules} Modul
-
-Pertahankan streak Anda dengan menjawab kuis harian! Ketik */quiz* (atau *2*) sekarang. 🚀${LOOPBACK_FOOTER}`;
+      const streakText = isEnglishUser
+        ? `🔥 *STUDY CONSISTENCY & METRICS*\nHello, *${user.display_name}*!\n\n• *Current Streak:* 🔥 *${user.streak_count || 0} Consecutive Days*\n• *Last Active:* ${user.last_active_date || 'Today'}\n• *Quizzes Answered Correctly:* 🎯 ${totalQuizzes} Questions\n• *Modules Completed:* 📚 ${completedModules} Modules\n\nKeep your streak alive by taking daily quizzes! Type */quiz* (or *2*) now. 🚀${getLoopbackFooter(user)}`
+        : `🔥 *KONSISTENSI & STATISTIK BELAJAR*\nHalo, *${user.display_name}*!\n\n• *Current Streak:* 🔥 *${user.streak_count || 0} Hari Berturut-turut*\n• *Terakhir Aktif:* ${user.last_active_date || 'Hari ini'}\n• *Kuis Terjawab Benar:* 🎯 ${totalQuizzes} Soal\n• *Modul Diselesaikan:* 📚 ${completedModules} Modul\n\nPertahankan streak Anda dengan menjawab kuis harian! Ketik */quiz* (atau *2*) sekarang. 🚀${getLoopbackFooter(user)}`;
       await reply({ text: streakText });
       return;
     }
@@ -818,7 +890,7 @@ Pertahankan streak Anda dengan menjawab kuis harian! Ketik */quiz* (atau *2*) se
       }
       saveUserNote(user.id, 'Catatan Cepat', noteBody, 'note');
       await reply({
-        text: `📝 *Catatan Berhasil Disimpan!*\n\n_"${noteBody}"_${LOOPBACK_FOOTER}`
+        text: `📝 *Catatan Berhasil Disimpan!*\n\n_"${noteBody}"_${getLoopbackFooter(user)}`
       });
       return;
     }
@@ -826,11 +898,11 @@ Pertahankan streak Anda dengan menjawab kuis harian! Ketik */quiz* (atau *2*) se
     if (lowerText === '/notes') {
       const notes = getUserNotes(user.id);
       if (notes.length === 0) {
-        await reply({ text: `Belum ada catatan yang tersimpan. Gunakan perintah */catat [isi]* untuk menyimpan catatan.${LOOPBACK_FOOTER}` });
+        await reply({ text: `Belum ada catatan yang tersimpan. Gunakan perintah */catat [isi]* untuk menyimpan catatan.${getLoopbackFooter(user)}` });
         return;
       }
       const noteList = notes.map((n, idx) => `${idx + 1}. *${n.title}* (${n.created_at})\n   "${n.note_body}"`).join('\n\n');
-      await reply({ text: `📋 *Daftar Catatan Anda:*\n\n${noteList}${LOOPBACK_FOOTER}` });
+      await reply({ text: `📋 *Daftar Catatan Anda:*\n\n${noteList}${getLoopbackFooter(user)}` });
       return;
     }
 
@@ -856,7 +928,7 @@ Pertahankan streak Anda dengan menjawab kuis harian! Ketik */quiz* (atau *2*) se
 • Notification: *${prefName}*
 • Streak: *🔥 ${user.streak_count || 0} Days*
 
-Type */lang id* to switch to Indonesian or */reset* to restart setup from scratch.${LOOPBACK_FOOTER}`
+Type */lang id* to switch to Indonesian or */reset* to restart setup from scratch.${getLoopbackFooter(user)}`
         : `👤 *PROFIL PENGGUNA*
 • Nama: *${user.display_name}*
 • Nomor: *${user.phone_number}*
@@ -865,14 +937,14 @@ Type */lang id* to switch to Indonesian or */reset* to restart setup from scratc
 • Jadwal Notifikasi: *${prefName}*
 • Streak: *🔥 ${user.streak_count || 0} Hari*
 
-Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ulang preferensi dari awal.${LOOPBACK_FOOTER}`;
+Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ulang preferensi dari awal.${getLoopbackFooter(user)}`;
       await reply({ text: profileText });
       return;
     }
 
     // Shortcut 5 -> /bantuan atau /help
     if (lowerText === '/bantuan' || lowerText === '/help' || lowerText === 'bantuan' || lowerText === 'help' || lowerText === '5') {
-      await reply({ text: `${MESSAGES.HELP(user)}${LOOPBACK_FOOTER}` });
+      await reply({ text: `${MESSAGES.HELP(user)}${getLoopbackFooter(user)}` });
       return;
     }
 
@@ -881,7 +953,7 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
     if (isClearTopicCmd) {
       clearLlmConversation(user.id);
       await reply({
-        text: `🧹 *Konteks Diskusi Berhasil Direset!*\n\nRiwayat percakapan sebelumnya telah dibersihkan. Anda sekarang dapat menanyakan topik baru secara mandiri tanpa terpengaruh riwayat diskusi sebelumnya.\n\n_Silakan ketik pertanyaan atau topik telekomunikasi yang ingin Anda bahas!_${LOOPBACK_FOOTER}`
+        text: `🧹 *Konteks Diskusi Berhasil Direset!*\n\nRiwayat percakapan sebelumnya telah dibersihkan. Anda sekarang dapat menanyakan topik baru secara mandiri tanpa terpengaruh riwayat diskusi sebelumnya.\n\n_Silakan ketik pertanyaan atau topik telekomunikasi yang ingin Anda bahas!_${getLoopbackFooter(user)}`
       });
       return;
     }
@@ -897,11 +969,13 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
         .replace(/^\/?(masukan|feedback|saran)[:\s-]*/i, '')
         .trim();
 
+      const isEnglishUser = user.preferred_language === 'en';
       if (!inlineFeedback || lowerText === '6') {
         updateUserState(user.jid, 'AWAITING_USER_FEEDBACK', null);
-        await reply({
-          text: `💡 *FORM MASUKAN & SARAN PENGEMBANGAN*\n\nPunya usulan topik 3GPP/5G/ML baru, ide fitur tambahan, atau menemukan kendala pada bot?\n\nSilakan *tuliskan pesan masukan Anda* sekarang dan kirimkan ke chat ini.\n\n_(Ketik *0* atau */batal* untuk membatalkan)_`
-        });
+        const prompt = isEnglishUser
+          ? `💡 *FEEDBACK & SUGGESTIONS FORM*\n\nHave ideas for new 3GPP/5G/ML topics, feature suggestions, or encountered an issue with the bot?\n\nPlease *type your feedback message* now and send it to this chat.\n\n_(Type *0* or */cancel* to cancel)_`
+          : `💡 *FORM MASUKAN & SARAN PENGEMBANGAN*\n\nPunya usulan topik 3GPP/5G/ML baru, ide fitur tambahan, atau menemukan kendala pada bot?\n\nSilakan *tuliskan pesan masukan Anda* sekarang dan kirimkan ke chat ini.\n\n_(Ketik *0* atau */batal* untuk membatalkan)_`;
+        await reply({ text: prompt });
         return;
       }
 
@@ -910,9 +984,10 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
         category: 'general'
       });
 
-      await reply({
-        text: `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn (Tiket *#${fbId || 'BARU'}*):\n_"${inlineFeedback}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya! 🚀${LOOPBACK_FOOTER}`
-      });
+      const ack = isEnglishUser
+        ? `🙏 *Thank You for Your Feedback!*\n\nYour suggestion has been recorded in the TelcoLearn development system (Ticket *#${fbId || 'NEW'}*):\n_"${inlineFeedback}"_\n\nYour ideas are invaluable for adding future features and curriculum! 🚀${getLoopbackFooter(user)}`
+        : `🙏 *Terima Kasih Banyak atas Masukan Anda!*\n\nSaran Anda telah berhasil dicatat ke sistem pengembangan TelcoLearn (Tiket *#${fbId || 'BARU'}*):\n_"${inlineFeedback}"_\n\nIde dan masukan Anda sangat berharga untuk penambahan fitur dan kurikulum selanjutnya! 🚀${getLoopbackFooter(user)}`;
+      await reply({ text: ack });
       return;
     }
 
@@ -936,17 +1011,17 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
         if (simResult && simResult.image) {
           await reply({
             image: simResult.image,
-            caption: `${simResult.caption}${LOOPBACK_FOOTER}`
+            caption: `${simResult.caption}${getLoopbackFooter(user)}`
           });
         } else {
           await reply({
-            text: `⚠️ Maaf, belum dapat merender gambar simulasi untuk topik ini saat ini.${LOOPBACK_FOOTER}`
+            text: `⚠️ Maaf, belum dapat merender gambar simulasi untuk topik ini saat ini.${getLoopbackFooter(user)}`
           });
         }
       } catch (simErr) {
         console.error('❌ Gagal menghasilkan simulasi visual:', simErr);
         await reply({
-          text: `⚠️ Terjadi kendala saat merender simulasi: ${simErr.message}${LOOPBACK_FOOTER}`
+          text: `⚠️ Terjadi kendala saat merender simulasi: ${simErr.message}${getLoopbackFooter(user)}`
         });
       }
       return;
@@ -1035,8 +1110,8 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
       await reply({
         text: `🔍 *Terdeteksi potongan log protokol radio.* Menganalisis RCA via AI Cognitive Engine...`
       });
-      const analysis = await analyzeTelcoLog(rawText, user.id);
-      await reply({ text: `${analysis}${LOOPBACK_FOOTER}` });
+      const analysis = await analyzeTelcoLog(rawText, user.id, user.preferred_language);
+      await reply({ text: `${analysis}${getLoopbackFooter(user)}` });
       return;
     }
 
@@ -1053,9 +1128,9 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
     // 8.5. TIER-1 LOCAL PRE-FILTER: TOPIK DI LUAR LINGKUP TELCO & NETWORKING (Hemat Token LLM)
     if (isObviousNonTelcoQuery(rawText)) {
       console.log(`🛡️ [Out-of-Scope Pre-Filter] Menolak pertanyaan non-telco dari user ${user.jid}: "${rawText}"`);
-      const isEnglish = /\b(how|what|why|who|when|where|which|can|recipe|cook|weather|president|love|movie|song)\b/i.test(rawText);
+      const isEnglish = user.preferred_language === 'en';
       const refusalMsg = isEnglish ? MESSAGES.OUT_OF_SCOPE_EN : MESSAGES.OUT_OF_SCOPE;
-      await reply({ text: `${refusalMsg}${LOOPBACK_FOOTER}` });
+      await reply({ text: `${refusalMsg}${getLoopbackFooter(user)}` });
       return;
     }
 
@@ -1063,7 +1138,7 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
     const identityRegex = /\b(who\s*(are|r)\s*(you|u)|what\s*(are|r)\s*(you|u)|what\s*is\s*(this\s*bot|telcolearn)|what\s*can\s*you\s*do|tell\s*me\s*about\s*yourself|introduce\s*yourself|who\s*made\s*you|kamu\s*(itu)?\s*siapa|siapa\s*(sih)?\s*(kamu|anda)|anda\s*(itu)?\s*siapa|siapakah\s*(kamu|anda)|perkenal(kan)?(\s*(diri|anda|kamu))?|kenalan(\s*dong)?|bot\s*apa\s*(ini|sih)|ini\s*bot\s*apa|apa\s*ini|apa\s*itu\s*telcolearn|tentang\s*bot|tentang\s*telcolearn|bisa\s*apa\s*aja|fitur\s*bot)\b/i;
     const cleanPrompt = lowerText.replace(/[?!.,]/g, '').trim();
     if (identityRegex.test(cleanPrompt)) {
-      const isEnglish = /\b(who|what|tell me|made you|can you|are you|introduce)\b/i.test(cleanPrompt);
+      const isEnglish = user.preferred_language === 'en';
       const identityReply = isEnglish
         ? `👋 *I am TelcoLearn Bot!*
 An AI Study Assistant & Technical Diagnostic Mentor specialized in *Telecommunications, 4G/5G Wireless Protocols, and Computer Networking*.
@@ -1094,7 +1169,7 @@ Asisten AI & Mentor Diagnostik Teknis spesialis *Telekomunikasi, Protokol Radio 
 • Ketik *0* (atau */menu*) untuk membuka menu utama.
 • Atau langsung tanyakan konsep jaringan/telco apa saja ke sini!`;
 
-      await reply({ text: `${identityReply}${LOOPBACK_FOOTER}` });
+      await reply({ text: `${identityReply}${getLoopbackFooter(user)}` });
       return;
     }
 
@@ -1140,7 +1215,7 @@ _(Balas *1* untuk topik baru, atau *2* jika masih terkait)_`;
         contextTrack: user.focus_track,
         preferredLanguage: user.preferred_language
       });
-      await reply({ text: `${answer}${LOOPBACK_FOOTER}` });
+      await reply({ text: `${answer}${getLoopbackFooter(user)}` });
       return;
     }
 
