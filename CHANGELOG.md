@@ -1,5 +1,10 @@
 # TelcoLearn Changelog
 
+## [v3.5.0] - 2026-10-16
+
+### Highlights
+Add intelligent adaptive language detection and 3x consecutive auto-switch
+
 ## [v3.4.0] - 2026-10-16
 
 ### Highlights
