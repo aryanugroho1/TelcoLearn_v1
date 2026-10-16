@@ -1,5 +1,10 @@
 # TelcoLearn Changelog
 
+## [v3.4.0] - 2026-10-16
+
+### Highlights
+Add Safe WhatsApp group mode, streak leaderboard (/top), viral challenge cards (/tantang), 30s Telco Espresso tips (/espresso), and streak rescue system
+
 ## [v3.3.0] - 2026-10-16
 
 ### Highlights
