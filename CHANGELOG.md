@@ -1,5 +1,10 @@
 # TelcoLearn Changelog
 
+## [v3.3.0] - 2026-10-16
+
+### Highlights
+Add Telecom Project Management (PMP) Track and RAG Knowledge Base
+
 ## [v3.2.0] - 2026-10-16
 
 ### Highlights

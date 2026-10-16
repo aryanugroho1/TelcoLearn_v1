@@ -1,6 +1,6 @@
 {
   "name": "telcolearn-engine",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "type": "module",
   "description": "TelcoLearn 4G/5G & ML Study Companion powered by Baileys & Gemini 3 Flash",
   "main": "index.js",
