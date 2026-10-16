@@ -1,5 +1,10 @@
 # TelcoLearn Changelog
 
+## [v3.2.0] - 2026-10-16
+
+### Highlights
+Enrich Data Analytics track with practical Telco Knowledge Base for QGIS, Power BI, and Tableau
+
 ## [v3.1.0] - 2026-10-16
 
 ### Highlights
