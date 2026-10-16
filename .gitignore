@@ -2,6 +2,7 @@
 *.md
 **/*.md
 !README.md
+!CHANGELOG.md
 !docs/**/*.md
 !knowledge_sources/**/*.md
 

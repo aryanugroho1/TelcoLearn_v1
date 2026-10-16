@@ -119,7 +119,7 @@ async function release() {
 
   // 7. Git Commit & Tag
   try {
-    run('git add package.json CHANGELOG.md data/backups/manifest.json');
+    run('git add package.json CHANGELOG.md .gitignore');
     run(`git commit -m "chore(release): ${tag} - ${customNotes.replace(/"/g, '\\"')}"`);
     run(`git tag -a "${tag}" -m "Release ${tag}: ${customNotes.replace(/"/g, '\\"')}"`);
     console.log(`🏷️ [Release Manager] Created git tag: ${tag}`);
