@@ -5,7 +5,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { GEMINI_SYSTEM_INSTRUCTION, GEMINI_SYSTEM_INSTRUCTION_EN, MESSAGES } from '../config/constants.js';
+import { GEMINI_SYSTEM_INSTRUCTION, GEMINI_SYSTEM_INSTRUCTION_EN, MESSAGES, detectQueryLanguage } from '../config/constants.js';
 import { logLlmConversation, searchKnowledgeBase, getRecentLlmConversation } from '../database/db.js';
 import { getCachedResponse, setCachedResponse } from './cacheService.js';
 
@@ -438,6 +438,8 @@ export async function answerGeneralTelcoQuestion(question, userId = 0, options =
     activeLang = 'en';
   } else if (isExplicitIndonesian) {
     activeLang = 'id';
+  } else {
+    activeLang = detectQueryLanguage(question, preferredLanguage);
   }
   const isEnglish = activeLang === 'en';
 

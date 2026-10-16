@@ -25,7 +25,10 @@ const {
   saveUserNote,
   getUserNotes,
   getDailyTokenMetrics,
-  getDb
+  getDb,
+  logLlmConversation,
+  trackAndAdaptUserLanguage,
+  getRecentUserQueries
 } = db;
 
 // Safe fallbacks to prevent crash if an older db.js is cached by Docker/volume
@@ -46,7 +49,8 @@ import {
   getLoopbackFooter,
   getRandomEspressoTip,
   formatLeaderboard,
-  formatChallengeMessage
+  formatChallengeMessage,
+  detectQueryLanguage
 } from '../config/constants.js';
 import {
   analyzeTelcoLog,
@@ -327,16 +331,17 @@ export async function handleIncomingMessage(sock, msg) {
     const isMediaInquiry = hasImage || hasDocument;
 
     if (!user) {
+      const firstLang = detectQueryLanguage(effectiveText, 'id');
       user = createUser({
         jid: userDbKey,
         phone_number: phoneNumber,
         display_name: pushName,
         current_state: (isGroup || isSelfChat || isFreeInquiry || isMediaInquiry) ? 'IDLE' : 'ONBOARDING_LANG',
         focus_track: 'protocol_qa',
-        preferred_language: 'id',
+        preferred_language: firstLang,
         reminder_preference: 'all'
       });
-      console.log(`👋 [User Baru] Terdaftar: ${userDbKey} (State: ${user.current_state})`);
+      console.log(`👋 [User Baru] Terdaftar: ${userDbKey} (State: ${user.current_state}, Lang: ${firstLang})`);
       if (!isGroup && !isSelfChat && !isFreeInquiry && !isMediaInquiry) {
         await reply({ text: MESSAGES.WELCOME_LANGUAGE });
         return;
@@ -471,8 +476,7 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
         // User langsung mengetik pertanyaan teknis bebas / slash command:
         // Auto-complete onboarding ke IDLE agar tidak memblokir user
         console.log(`⏩ [Auto-Bypass Onboarding Lang] User ${user.jid} mengirim "${rawText}", auto-complete onboarding ke IDLE.`);
-        const isEnglishInquiry = /\b(what|how|why|when|where|which|who|can|is|are|the|in|explain|analyze|tell)\b/i.test(rawText);
-        const autoLang = isEnglishInquiry ? 'en' : 'id';
+        const autoLang = detectQueryLanguage(rawText, user?.preferred_language || 'id');
         updateUserPreferences(user.jid, { focus_track: 'protocol_qa', preferred_language: autoLang, reminder_preference: 'all' });
         updateUserState(user.jid, 'IDLE', null);
         user = getUserByJid(user.jid);
@@ -559,26 +563,30 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
 
       if (yesRegex.test(lowerText)) {
         updateUserState(user.jid, 'IDLE', null);
-        const ack = isEnglishUser
+        const activeLang = trackAndAdaptUserLanguage(user, pendingQuestion);
+        const isEnglishActive = activeLang === 'en';
+        const ack = isEnglishActive
           ? `👍 *Understood, answering in the context of Field & Drive Test 🚙:*`
           : `👍 *Baik, pertanyaan Anda dijawab dalam konteks Field & Drive Test 🚙:*`;
         await reply({ text: ack });
         const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
           contextTrack: 'drive_test',
-          preferredLanguage: user.preferred_language
+          preferredLanguage: activeLang
         });
         await reply({ text: `${answer}${getLoopbackFooter(user)}` });
         return;
       } else if (noRegex.test(lowerText)) {
         updateUserState(user.jid, 'IDLE', null);
+        const activeLang = trackAndAdaptUserLanguage(user, pendingQuestion);
+        const isEnglishActive = activeLang === 'en';
         const trackLabel = FOCUS_TRACKS[Object.keys(FOCUS_TRACKS).find(k => FOCUS_TRACKS[k].key === user.focus_track)]?.label || 'Protocol QA';
-        const ack = isEnglishUser
+        const ack = isEnglishActive
           ? `👍 *Understood, answering in the context of ${trackLabel}:*`
           : `👍 *Baik, pertanyaan Anda dijawab dalam konteks ${trackLabel}:*`;
         await reply({ text: ack });
         const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
           contextTrack: user.focus_track,
-          preferredLanguage: user.preferred_language
+          preferredLanguage: activeLang
         });
         await reply({ text: `${answer}${getLoopbackFooter(user)}` });
         return;
@@ -626,26 +634,30 @@ _(Ketik *0* untuk langsung ke menu utama / Type *0* for main menu)_`
         // Bersihkan memori percakapan lama agar tidak tercampur
         clearLlmConversation(user.id);
         updateUserState(user.jid, 'IDLE', null);
-        const startMsg = isEnglishUser
+        const activeLang = trackAndAdaptUserLanguage(user, pendingQuestion);
+        const isEnglishActive = activeLang === 'en';
+        const startMsg = isEnglishActive
           ? `🆕 *Starting New Topic:* Analyzing without previous context...`
           : `🆕 *Memulai Topik Baru:* Menganalisis tanpa riwayat sebelumnya...`;
         await reply({ text: startMsg });
         const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
           contextTrack: user.focus_track,
-          preferredLanguage: user.preferred_language,
+          preferredLanguage: activeLang,
           forceNewTopic: true
         });
         await reply({ text: `${answer}${getLoopbackFooter(user)}` });
         return;
       } else if (isRelatedChoice) {
         updateUserState(user.jid, 'IDLE', null);
-        const contMsg = isEnglishUser
+        const activeLang = trackAndAdaptUserLanguage(user, pendingQuestion);
+        const isEnglishActive = activeLang === 'en';
+        const contMsg = isEnglishActive
           ? `🔗 *Continuing Discussion:* Connecting with previous context...`
           : `🔗 *Melanjutkan Pembahasan:* Menghubungkan dengan konteks sebelumnya...`;
         await reply({ text: contMsg });
         const answer = await answerGeneralTelcoQuestion(pendingQuestion, user.id, {
           contextTrack: user.focus_track,
-          preferredLanguage: user.preferred_language,
+          preferredLanguage: activeLang,
           forceFollowUp: true
         });
         await reply({ text: `${answer}${getLoopbackFooter(user)}` });
@@ -1256,21 +1268,31 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
 
     // 7. HEURISTIC LOG DETECTOR (Gemini 3 Flash Cognitive Engine)
     if (detectTelcoLogPattern(rawText)) {
+      const activeLang = trackAndAdaptUserLanguage(user, rawText);
+      const isEnglish = activeLang === 'en';
+      const triageMsg = isEnglish
+        ? `🔍 *Radio protocol log snippet detected.* Analyzing RCA via AI Cognitive Engine...`
+        : `🔍 *Terdeteksi potongan log protokol radio.* Menganalisis RCA via AI Cognitive Engine...`;
       await reply({
-        text: `🔍 *Terdeteksi potongan log protokol radio.* Menganalisis RCA via AI Cognitive Engine...`
+        text: triageMsg
       });
       touchUserActivity(user.jid);
-      const analysis = await analyzeTelcoLog(rawText, user.id, user.preferred_language);
+      const analysis = await analyzeTelcoLog(rawText, user.id, activeLang);
       await reply({ text: `${analysis}${getLoopbackFooter(user)}` });
       return;
     }
 
     // 8. DETEKSI PERTANYAAN KONTEKS DRIVETEST (Jika fokus pengguna saat ini bukan Drive Test)
     if (isDriveTestInquiry(rawText) && user.focus_track !== 'drive_test') {
+      const activeLang = detectQueryLanguage(rawText, user.preferred_language || 'id');
+      const isEnglish = activeLang === 'en';
       console.log(`🚙 [Drivetest Detection] Terdeteksi pertanyaan bernuansa drivetest dari user track "${user.focus_track}". Mengirim konfirmasi.`);
       updateUserState(user.jid, 'AWAITING_DRIVETEST_CONFIRM', { pending_question: rawText });
+      const dtPrompt = isEnglish
+        ? `🤔 Your question indicates field testing or drive testing.\n*Is this related to Drive Testing?*\n\n_(Reply *Yes* or *No*, or type *0* to return to main menu)_`
+        : `🤔 Pertanyaan Anda terindikasi seputar pengujian lapangan.\n*Apakah ini konteksnya Drivetest?*\n\n_(Balas *Ya* atau *Tidak*, atau ketik *0* untuk kembali ke menu)_`;
       await reply({
-        text: `🤔 Pertanyaan Anda terindikasi seputar pengujian lapangan.\n*Apakah ini konteksnya Drivetest?*\n\n_(Balas *Ya* atau *Tidak*, atau ketik *0* untuk kembali ke menu)_`
+        text: dtPrompt
       });
       return;
     }
@@ -1288,7 +1310,8 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
     const identityRegex = /\b(who\s*(are|r)\s*(you|u)|what\s*(are|r)\s*(you|u)|what\s*is\s*(this\s*bot|telcolearn)|what\s*can\s*you\s*do|tell\s*me\s*about\s*yourself|introduce\s*yourself|who\s*made\s*you|kamu\s*(itu)?\s*siapa|siapa\s*(sih)?\s*(kamu|anda)|anda\s*(itu)?\s*siapa|siapakah\s*(kamu|anda)|perkenal(kan)?(\s*(diri|anda|kamu))?|kenalan(\s*dong)?|bot\s*apa\s*(ini|sih)|ini\s*bot\s*apa|apa\s*ini|apa\s*itu\s*telcolearn|tentang\s*bot|tentang\s*telcolearn|bisa\s*apa\s*aja|fitur\s*bot)\b/i;
     const cleanPrompt = lowerText.replace(/[?!.,]/g, '').trim();
     if (identityRegex.test(cleanPrompt)) {
-      const isEnglish = user.preferred_language === 'en';
+      const activeLang = trackAndAdaptUserLanguage(user, rawText);
+      const isEnglish = activeLang === 'en';
       const identityReply = isEnglish
         ? `👋 *I am TelcoLearn Bot!*
 An AI Study Assistant & Technical Diagnostic Mentor specialized in *Telecommunications, 4G/5G Wireless Protocols, and Computer Networking*.
@@ -1319,12 +1342,16 @@ Asisten AI & Mentor Diagnostik Teknis spesialis *Telekomunikasi, Protokol Radio 
 • Ketik *0* (atau */menu*) untuk membuka menu utama.
 • Atau langsung tanyakan konsep jaringan/telco apa saja ke sini!`;
 
+      if (user.id && Number(user.id) > 0) {
+        logLlmConversation(user.id, rawText, identityReply, 50);
+      }
       await reply({ text: `${identityReply}${getLoopbackFooter(user)}` });
       return;
     }
 
     // 9. TANYA JAWAB BEBAS TELEKOMUNIKASI (Gemini AI Assistant & ShareTechNote RAG)
     if (rawText.trim().length >= 3) {
+      const activeLang = trackAndAdaptUserLanguage(user, rawText);
       // 9.1 Pengecekan Disjoint Topic Shift & Pertanyaan Balik Interaktif
       const maxHistory = parseInt(process.env.MAX_CONVERSATION_HISTORY || '3', 10);
       const sessionTimeoutMinutes = parseInt(process.env.CONVERSATION_SESSION_TIMEOUT_MINUTES || '20', 10);
@@ -1342,7 +1369,22 @@ Asisten AI & Mentor Diagnostik Teknis spesialis *Telekomunikasi, Protokol Radio 
             last_topic: lastTopic
           });
 
-          const confirmMsg = `🤔 *Konfirmasi Topik Diskusi*
+          const isEnglishActive = activeLang === 'en';
+          const confirmMsg = isEnglishActive
+            ? `🤔 *Discussion Topic Confirmation*
+Previous discussion was regarding:
+👉 _"${truncatedLastTopic}"_
+
+Your current question:
+👉 _"${truncatedCurrent}"_
+
+Is this a *New Topic* or *Still Related* to the previous discussion?
+
+1️⃣ *New Topic* (Start fresh without prior history)
+2️⃣ *Still Related* (Continue follow-up from prior discussion)
+
+_(Reply *1* for new topic, or *2* if still related)_`
+            : `🤔 *Konfirmasi Topik Diskusi*
 Pembahasan sebelumnya mengenai:
 👉 _"${truncatedLastTopic}"_
 
@@ -1364,7 +1406,7 @@ _(Balas *1* untuk topik baru, atau *2* jika masih terkait)_`;
       touchUserActivity(user.jid);
       const answer = await answerGeneralTelcoQuestion(rawText, user.id, {
         contextTrack: user.focus_track,
-        preferredLanguage: user.preferred_language
+        preferredLanguage: activeLang
       });
       await reply({ text: `${answer}${getLoopbackFooter(user)}` });
       return;

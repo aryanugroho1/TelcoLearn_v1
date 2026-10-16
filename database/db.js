@@ -26,6 +26,7 @@ if (!fs.existsSync(dbDir)) {
 
 import { DatabaseSync } from 'node:sqlite';
 import { getPgPool } from '../services/postgres.js';
+import { detectQueryLanguage } from '../config/constants.js';
 
 let dbInstance = null;
 
@@ -472,6 +473,69 @@ export function getRecentLlmConversation(userId, limit = 5, maxAgeMinutes = 20) 
   } catch (e) {
     return [];
   }
+}
+
+/**
+ * Mengambil kueri teks terbaru yang diajukan pengguna ke AI
+ */
+export function getRecentUserQueries(userId, limit = 2) {
+  const db = getDb();
+  if (!userId || Number(userId) <= 0) return [];
+  try {
+    const rows = db.prepare(`
+      SELECT incoming_query
+      FROM llm_conversation_logs
+      WHERE user_id = ?
+      ORDER BY id DESC
+      LIMIT ?
+    `).all(userId, limit);
+    return rows.map(r => r.incoming_query).filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Intelligent Adaptive Language Tracking & Auto-Switching:
+ * 1. Mendeteksi bahasa query saat ini (EN vs ID).
+ * 2. Memeriksa 2 query sebelumnya dari pengguna.
+ * 3. Jika 3 query berturut-turut dalam English, intelegensi sistem otomatis menganggap user
+ *    berbahasa English, memperbarui profil (preferred_language = 'en'), sehingga seluruh kuis terjadwal,
+ *    modul micro-learning, dan menu otomatis berganti ke English.
+ * 4. Symmetrically berlaku sebaliknya: jika 3 query berturut-turut dalam Bahasa Indonesia,
+ *    profil otomatis beralih kembali ke Bahasa Indonesia (preferred_language = 'id').
+ * 5. Mengembalikan bahasa aktif untuk menjawab kueri saat ini secara tepat.
+ */
+export function trackAndAdaptUserLanguage(user, currentQuery) {
+  if (!user) return 'id';
+  const currentLang = detectQueryLanguage(currentQuery, user.preferred_language || 'id');
+
+  if (user.id && Number(user.id) > 0) {
+    const pastQueries = getRecentUserQueries(user.id, 2);
+    if (pastQueries.length >= 2) {
+      const lang1 = detectQueryLanguage(pastQueries[0], user.preferred_language || 'id');
+      const lang2 = detectQueryLanguage(pastQueries[1], user.preferred_language || 'id');
+
+      // 3x pertanyaan berturut-turut dalam English
+      if (currentLang === 'en' && lang1 === 'en' && lang2 === 'en') {
+        if (user.preferred_language !== 'en') {
+          updateUserPreferences(user.jid, { preferred_language: 'en' });
+          user.preferred_language = 'en';
+          console.log(`🌐 [Adaptive Language] Terdeteksi 3 pertanyaan berturut-turut dalam Bahasa Inggris dari user ${user.jid}. Profil otomatis dialihkan ke English (termasuk kuis & modul terjadwal).`);
+        }
+      }
+      // 3x pertanyaan berturut-turut dalam Bahasa Indonesia
+      else if (currentLang === 'id' && lang1 === 'id' && lang2 === 'id') {
+        if (user.preferred_language !== 'id') {
+          updateUserPreferences(user.jid, { preferred_language: 'id' });
+          user.preferred_language = 'id';
+          console.log(`🌐 [Adaptive Language] Terdeteksi 3 pertanyaan berturut-turut dalam Bahasa Indonesia dari user ${user.jid}. Profil otomatis dialihkan ke Bahasa Indonesia (termasuk kuis & modul terjadwal).`);
+        }
+      }
+    }
+  }
+
+  return currentLang;
 }
 
 /**

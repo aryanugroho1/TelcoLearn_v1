@@ -191,6 +191,82 @@ export function isObviousNonTelcoQuery(text) {
   return nonTelcoPatterns.some(pattern => pattern.test(clean));
 }
 
+/**
+ * Heuristic Language Detector (English vs. Bahasa Indonesia)
+ * Mendeteksi bahasa query berdasarkan kata tanya, auxiliary, preposisi, dan pola kalimat
+ */
+export function detectQueryLanguage(text, fallback = 'id') {
+  if (!text || typeof text !== 'string') return fallback;
+
+  // 1. Explicit language request override
+  if (/\b(in\s+english|english\s*please|speak\s*english|switch\s*to\s*english|translate\s*to\s*english)\b/i.test(text)) {
+    return 'en';
+  }
+  if (/\b(bahasa\s*indonesia|pake\s*bahasa\s*indo|dalam\s*bahasa\s*indonesia|ganti\s*(ke\s*)?bahasa\s*indonesia)\b/i.test(text)) {
+    return 'id';
+  }
+
+  const clean = text.toLowerCase().replace(/[^\w\s]/g, ' ');
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return fallback;
+
+  // Indonesian linguistic markers
+  const idMarkers = new Set([
+    'apa', 'apakah', 'bagaimana', 'gimana', 'kenapa', 'mengapa', 'kapan', 'dimana', 'kemana',
+    'siapa', 'yang', 'dan', 'atau', 'untuk', 'pada', 'dari', 'dengan', 'dalam', 'ke', 'di',
+    'ini', 'itu', 'adalah', 'yaitu', 'merupakan', 'bisa', 'dapat', 'tolong', 'jelaskan',
+    'terangkan', 'bedanya', 'perbedaan', 'antara', 'maksud', 'arti', 'pengertian', 'fungsi',
+    'kegunaan', 'cara', 'bagaimanakah', 'sudah', 'belum', 'ada', 'tidak', 'bukan', 'jangan',
+    'kamu', 'anda', 'saya', 'aku', 'kita', 'kami', 'mereka', 'dia', 'nya', 'kalo', 'kalau', 'saat',
+    'jika', 'bila', 'apabila', 'terjadi', 'mengalami', 'menggunakan', 'solusi', 'solusinya',
+    'kenapakah', 'kok', 'sih', 'dong', 'ya', 'kan', 'lah', 'kasus', 'tadi', 'tersebut', 'penjelasan'
+  ]);
+
+  // English linguistic markers
+  const enMarkers = new Set([
+    'what', 'how', 'why', 'when', 'where', 'which', 'who', 'whose', 'whom',
+    'can', 'could', 'is', 'are', 'was', 'were', 'will', 'would', 'shall', 'should',
+    'do', 'does', 'did', 'done', 'have', 'has', 'had', 'having',
+    'the', 'a', 'an', 'and', 'or', 'but', 'for', 'with', 'from', 'about', 'between',
+    'in', 'on', 'at', 'to', 'of', 'by', 'into', 'through', 'during', 'before', 'after',
+    'this', 'that', 'these', 'those', 'there', 'here',
+    'explain', 'describe', 'tell', 'show', 'difference', 'meaning', 'definition',
+    'troubleshoot', 'analyze', 'solve', 'solution', 'cause', 'reason', 'purpose',
+    'you', 'your', 'my', 'me', 'we', 'our', 'us', 'they', 'their', 'them', 'he', 'she', 'it',
+    'if', 'then', 'because', 'since', 'so', 'as', 'please', 'help', 'know', 'understand',
+    'failure', 'reject', 'dropped', 'missing', 'unknown', 'expired', 'timeout', 'issue'
+  ]);
+
+  let idScore = 0;
+  let enScore = 0;
+
+  for (const word of words) {
+    if (idMarkers.has(word)) idScore += 2;
+    if (enMarkers.has(word)) enScore += 2;
+  }
+
+  // Strong English collocations
+  if (/\b(what\s+is|what\s+are|how\s+to|how\s+do|how\s+does|why\s+is|why\s+does|difference\s+between|can\s+you|could\s+you|tell\s+me|explain\s+to|in\s+5g|in\s+4g|in\s+lte|in\s+nr)\b/i.test(text)) {
+    enScore += 4;
+  }
+
+  // Strong Indonesian collocations
+  if (/\b(apa\s+itu|apa\s+yang|gimana\s+cara|bagaimana\s+cara|bedanya\s+antara|kenapa\s+bisa|jelaskan\s+tentang|maksud\s+dari|pada\s+saat|di\s+lapangan)\b/i.test(text)) {
+    idScore += 4;
+  }
+
+  if (enScore > idScore) return 'en';
+  if (idScore > enScore) return 'id';
+
+  // Fallback: check if the first word is a common English interrogative
+  const firstWord = words[0];
+  if (['what', 'how', 'why', 'when', 'where', 'which', 'who', 'can', 'could', 'is', 'are', 'explain', 'tell'].includes(firstWord)) {
+    return 'en';
+  }
+
+  return fallback;
+}
+
 export const FOCUS_TRACKS = {
   1: { key: 'protocol_qa', label: '4G/5G Protocol QA 📡', label_en: '4G/5G Protocol QA 📡', label_id: '4G/5G Protocol QA 📡' },
   2: { key: 'drive_test', label: 'Field & Drive Test 🚙', label_en: 'Field & Drive Test 🚙', label_id: 'Field & Drive Test 🚙' },
