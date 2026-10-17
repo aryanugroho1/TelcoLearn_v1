@@ -120,7 +120,8 @@ Perintah pemantauan PM2:
 - `/batal` : Membatalkan sesi kuis atau pencatatan yang sedang aktif.
 - `/streak` : Melihat rekor hari belajar berturut-turut & pencapaian.
 - `/track [1-5]` : Mengubah fokus materi (4G/5G QA, Drive Test, ML Telco, Log Analysis, PMP).
-- `/jadwal [1/2/3]` : Mengubah waktu pengingat materi harian.
+- `/jadwal [1-4]` : Mengubah waktu pengingat materi harian (1: Pagi, 2: Siang, 3: Lengkap, 4: Nonaktif).
+- `/stop` (atau `/unsubscribe`) : Berhenti berlangganan notifikasi/broadcast otomatis.
 - `/catat [isi]` : Menyimpan catatan teknis ke database lokal.
 - `/notes` : Melihat daftar catatan pribadi yang tersimpan.
 - `/profil` : Menampilkan jalur fokus, bahasa, & preferensi waktu belajar.

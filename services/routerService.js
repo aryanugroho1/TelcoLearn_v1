@@ -892,8 +892,12 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
     }
 
     if (lowerText === '/jadwal' || lowerText.startsWith('/jadwal ') || lowerText === '/schedule' || lowerText.startsWith('/schedule ')) {
-      const arg = lowerText.replace(/^\/(jadwal|schedule)\s*/i, '').trim();
+      const rawArg = lowerText.replace(/^\/(jadwal|schedule)\s*/i, '').trim();
       const isEnglishUser = user.preferred_language === 'en';
+      let arg = rawArg;
+      if (['off', 'none', 'stop', 'mati', 'nonaktif'].includes(rawArg)) {
+        arg = '4';
+      }
       if (REMINDER_PREFERENCES[arg]) {
         const selected = REMINDER_PREFERENCES[arg];
         updateUserPreferences(user.jid, { reminder_preference: selected.key });
@@ -904,10 +908,23 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
         await reply({ text: ack });
       } else {
         const prompt = isEnglishUser
-          ? `⏰ *CHOOSE DAILY REMINDER SCHEDULE:*\n\n1️⃣ Morning (07:30 WIB)\n2️⃣ Afternoon (12:30 WIB)\n3️⃣ All (Morning, Afternoon, Night)\n\n_Type */schedule 1*, */schedule 2*, or */schedule 3*_${getLoopbackFooter(user)}`
-          : `⏰ *PILIH JADWAL NOTIFIKASI HARIAN:*\n\n1️⃣ Pagi (07:30 WIB)\n2️⃣ Siang (12:30 WIB)\n3️⃣ Lengkap (Pagi, Siang, Malam)\n\n_Ketik */jadwal 1*, */jadwal 2*, atau */jadwal 3*_${getLoopbackFooter(user)}`;
+          ? `⏰ *CHOOSE DAILY REMINDER SCHEDULE:*\n\n1️⃣ Morning (07:30 WIB)\n2️⃣ Afternoon (12:30 WIB)\n3️⃣ All (Morning, Afternoon, Night)\n4️⃣ Turn Off / Unsubscribe 🔕\n\n_Type */schedule 1*, */schedule 2*, */schedule 3*, or */schedule 4*_${getLoopbackFooter(user)}`
+          : `⏰ *PILIH JADWAL NOTIFIKASI HARIAN:*\n\n1️⃣ Pagi (07:30 WIB)\n2️⃣ Siang (12:30 WIB)\n3️⃣ Lengkap (Pagi, Siang, Malam)\n4️⃣ Nonaktifkan / Berhenti Berlangganan 🔕\n\n_Ketik */jadwal 1*, */jadwal 2*, */jadwal 3*, atau */jadwal 4*_${getLoopbackFooter(user)}`;
         await reply({ text: prompt });
       }
+      return;
+    }
+
+    // Command /unsubscribe, /stop, /berhenti
+    if (lowerText === '/stop' || lowerText === 'stop' || lowerText === '/unsubscribe' || lowerText === 'unsubscribe' || lowerText === '/berhenti' || lowerText === 'berhenti') {
+      updateUserPreferences(user.jid, { reminder_preference: 'off' });
+      updateUserState(user.jid, 'IDLE', null);
+      user.reminder_preference = 'off';
+      const isEnglishUser = user.preferred_language === 'en';
+      const ack = isEnglishUser
+        ? `🔕 *Automatic Notifications Disabled (Unsubscribed)*\n\nYou will no longer receive scheduled daily module broadcasts or streak reminders.\n\nYou can still access TelcoLearn anytime on-demand:\n• Type */learn* for self-paced modules\n• Type */quiz* for quiz challenges\n• Or ask any telecom question / paste logs directly.\n\n_Type */schedule* anytime to reactivate daily notifications._${getLoopbackFooter(user)}`
+        : `🔕 *Notifikasi Otomatis Dinonaktifkan (Berhenti Berlangganan)*\n\nAnda tidak akan menerima broadcast materi harian atau pengingat streak otomatis lagi.\n\nAnda tetap dapat menggunakan TelcoLearn secara mandiri kapan saja:\n• Ketik */belajar* untuk membaca modul\n• Ketik */quiz* untuk kuis interaktif\n• Atau langsung tanyakan konsep telekomunikasi / tempel log sinyal.\n\n_Ketik */jadwal* kapan saja untuk mengaktifkan kembali notifikasi harian._${getLoopbackFooter(user)}`;
+      await reply({ text: ack });
       return;
     }
 

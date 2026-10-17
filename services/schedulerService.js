@@ -124,7 +124,7 @@ export async function dispatchStreakRescue(maybeSock) {
     console.log(`🔥 [Streak Rescue] Ditemukan ${atRiskUsers.length} pengguna berisiko padam streak.`);
     let count = 0;
     for (const user of atRiskUsers) {
-      if (user.reminder_preference === 'none') continue;
+      if (user.reminder_preference === 'none' || user.reminder_preference === 'off') continue;
 
       const isEnglishUser = user.preferred_language === 'en';
       const rescueText = isEnglishUser

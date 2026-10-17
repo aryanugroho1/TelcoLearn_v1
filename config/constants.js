@@ -278,7 +278,8 @@ export const FOCUS_TRACKS = {
 export const REMINDER_PREFERENCES = {
   1: { key: 'morning', label: 'Pagi (07:30 WIB) 🌅', label_en: 'Morning (07:30 WIB) 🌅', label_id: 'Pagi (07:30 WIB) 🌅' },
   2: { key: 'afternoon', label: 'Siang (12:30 WIB) ☀️', label_en: 'Afternoon (12:30 WIB) ☀️', label_id: 'Siang (12:30 WIB) ☀️' },
-  3: { key: 'all', label: 'Lengkap (Pagi, Siang, Malam) 🚀', label_en: 'All (Morning, Afternoon, Night) 🚀', label_id: 'Lengkap (Pagi, Siang, Malam) 🚀' }
+  3: { key: 'all', label: 'Lengkap (Pagi, Siang, Malam) 🚀', label_en: 'All (Morning, Afternoon, Night) 🚀', label_id: 'Lengkap (Pagi, Siang, Malam) 🚀' },
+  4: { key: 'off', label: 'Nonaktif / Berhenti Berlangganan 🔕', label_en: 'Off / Unsubscribe 🔕', label_id: 'Nonaktif / Berhenti Berlangganan 🔕' }
 };
 
 export function getLoopbackFooter(userOrLang) {
@@ -447,7 +448,8 @@ TelcoLearn adalah platform micro-learning & asisten AI komprehensif untuk seluru
 • */simulasi* - Membuat grafik simulasi RF / diagram visual
 • */lang [en/id]* - Mengganti bahasa bot (English / Bahasa Indonesia)
 • */track [1-5]* - Mengganti jalur fokus belajar (QA, Drive Test, ML, Log, PMP)
-• */jadwal [1/2/3]* - Mengatur jadwal notifikasi harian
+• */jadwal [1-4]* - Mengatur jadwal notifikasi harian (1: Pagi, 2: Siang, 3: Lengkap, 4: Nonaktif)
+• */stop* atau */unsubscribe* - Berhenti berlangganan notifikasi harian otomatis
 • */catat [isi]* - Menyimpan catatan teknis ke database
 • */notes* - Melihat daftar catatan pribadi
 • */clear* - Reset riwayat percakapan untuk topik baru
@@ -487,7 +489,8 @@ TelcoLearn is a micro-learning platform & AI technical companion for Telecom & N
 • */sim* or */simulasi* - Render RF simulation graphs / diagrams
 • */lang [en/id]* - Switch bot language (English / Bahasa Indonesia)
 • */track [1-5]* - Switch study track (Protocol QA, Drive Test, ML, Log, PMP)
-• */schedule [1/2/3]* - Configure daily notification times
+• */schedule [1-4]* - Configure daily notification times (1: Morning, 2: Afternoon, 3: All, 4: Off)
+• */stop* or */unsubscribe* - Opt out from automated daily notifications
 • */note [text]* - Save technical notes to database
 • */notes* - List your personal saved notes
 • */clear* - Clear conversation context / start fresh topic
