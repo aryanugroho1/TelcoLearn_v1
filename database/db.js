@@ -260,40 +260,62 @@ export function getModuleById(id) {
   return db.prepare('SELECT * FROM modules WHERE id = ?').get(id) || null;
 }
 
+export function getCategoriesForTrack(track) {
+  switch (track) {
+    case 'telco_pmp':
+    case 'pmp':
+      return ['pmp'];
+    case 'ml_telco':
+      return ['ml'];
+    case 'drive_test':
+      return ['architecture', 'logfile'];
+    case 'log_telco':
+      return ['logfile', 'callflow'];
+    case 'protocol_qa':
+    default:
+      return ['callflow', 'logfile', 'architecture'];
+  }
+}
+
 export function getNextModuleForUser(userId) {
   const db = getDb();
   
   // Ambil preferensi track user jika tersedia
   const user = db.prepare('SELECT focus_track FROM users WHERE id = ?').get(userId);
   const track = user?.focus_track || 'protocol_qa';
+  const categories = getCategoriesForTrack(track);
+  const placeholders = categories.map(() => '?').join(',');
 
-  // 1. Coba ambil modul belum dibaca yang sesuai prioritas track
-  let trackCondition = '';
-  if (track === 'telco_pmp' || track === 'pmp') {
-    trackCondition = "CASE WHEN m.category = 'pmp' THEN 0 ELSE 1 END,";
-  } else if (track === 'ml_telco') {
-    trackCondition = "CASE WHEN m.category = 'ml' THEN 0 ELSE 1 END,";
-  } else if (track === 'drive_test') {
-    trackCondition = "CASE WHEN m.category IN ('architecture', 'logfile') THEN 0 ELSE 1 END,";
-  } else if (track === 'log_telco') {
-    trackCondition = "CASE WHEN m.category = 'logfile' THEN 0 ELSE 1 END,";
-  } else {
-    // protocol_qa
-    trackCondition = "CASE WHEN m.category IN ('callflow', 'logfile') THEN 0 ELSE 1 END,";
-  }
-
+  // 1. Coba ambil modul belum dibaca yang SESUAI EKSPLISIT DENGAN TRACK PENGGUNA
   const stmt = db.prepare(`
     SELECT m.* 
     FROM modules m
     LEFT JOIN user_module_progress p ON m.id = p.module_id AND p.user_id = ?
-    WHERE m.is_active = 1 AND p.id IS NULL
-    ORDER BY ${trackCondition} m.sequence_order ASC
+    WHERE m.is_active = 1 
+      AND m.category IN (${placeholders})
+      AND p.id IS NULL
+    ORDER BY m.sequence_order ASC
     LIMIT 1
   `);
-  const nextMod = stmt.get(userId);
+  const nextMod = stmt.get(userId, ...categories);
   if (nextMod) return nextMod;
 
-  // 2. Jika semua sudah pernah dikirim, kembalikan modul pertama untuk pengulangan
+  // 2. Jika seluruh modul dalam track ini sudah pernah dibaca (kurikulum habis),
+  // lakukan looping kurikulum: ulang dari modul pertama track yang SAMA (bukan melompat ke track lain)
+  const repeatStmt = db.prepare(`
+    SELECT * 
+    FROM modules 
+    WHERE is_active = 1 
+      AND category IN (${placeholders})
+    ORDER BY sequence_order ASC 
+    LIMIT 1
+  `);
+  const repeatMod = repeatStmt.get(...categories);
+  if (repeatMod) {
+    return { ...repeatMod, is_repeat: true };
+  }
+
+  // 3. Fallback jika tidak ada modul sama sekali pada track tersebut
   return db.prepare('SELECT * FROM modules WHERE is_active = 1 ORDER BY sequence_order ASC LIMIT 1').get() || null;
 }
 
@@ -323,38 +345,65 @@ export function getQuizById(quizId) {
 export function getNextQuizForUser(userId, preferredModuleId = null) {
   const db = getDb();
 
+  // Ambil preferensi track user untuk memfilter kuis sesuai fokus belajar
+  const user = db.prepare('SELECT focus_track FROM users WHERE id = ?').get(userId);
+  const track = user?.focus_track || 'protocol_qa';
+  const categories = getCategoriesForTrack(track);
+  const placeholders = categories.map(() => '?').join(',');
+
   // 1. Jika ada modul spesifik yang baru dipelajari, coba cari kuis modul tersebut
+  // (Pastikan modul tersebut memang termasuk kategori dalam track pengguna)
   if (preferredModuleId) {
     const modQuiz = db.prepare(`
       SELECT q.* FROM quizzes q
+      JOIN modules m ON q.module_id = m.id
       LEFT JOIN (
         SELECT quiz_id, MAX(is_correct) as answered_correctly 
         FROM quiz_logs WHERE user_id = ? GROUP BY quiz_id
       ) l ON q.id = l.quiz_id
-      WHERE q.module_id = ? AND q.is_active = 1 AND (l.answered_correctly IS NULL OR l.answered_correctly = 0)
+      WHERE q.module_id = ? 
+        AND q.is_active = 1 
+        AND m.category IN (${placeholders})
+        AND (l.answered_correctly IS NULL OR l.answered_correctly = 0)
       LIMIT 1
-    `).get(userId, preferredModuleId);
+    `).get(userId, preferredModuleId, ...categories);
     if (modQuiz) return modQuiz;
   }
 
-  // 2. Utamakan kuis yang belum pernah dijawab dengan benar
+  // 2. Utamakan kuis dalam track pengguna yang belum pernah dijawab dengan benar
   const stmt = db.prepare(`
     SELECT q.* 
     FROM quizzes q
+    JOIN modules m ON q.module_id = m.id
     LEFT JOIN (
       SELECT quiz_id, MAX(is_correct) as answered_correctly 
       FROM quiz_logs 
       WHERE user_id = ? 
       GROUP BY quiz_id
     ) l ON q.id = l.quiz_id
-    WHERE q.is_active = 1 AND (l.answered_correctly IS NULL OR l.answered_correctly = 0)
+    WHERE q.is_active = 1 
+      AND m.category IN (${placeholders})
+      AND (l.answered_correctly IS NULL OR l.answered_correctly = 0)
     ORDER BY RANDOM()
     LIMIT 1
   `);
-  const quiz = stmt.get(userId);
+  const quiz = stmt.get(userId, ...categories);
   if (quiz) return quiz;
 
-  // 3. Fallback ke random active quiz
+  // 3. Jika semua kuis dalam track sudah dijawab benar, ulangi kuis acak dari track yang SAMA
+  const repeatQuizStmt = db.prepare(`
+    SELECT q.* 
+    FROM quizzes q
+    JOIN modules m ON q.module_id = m.id
+    WHERE q.is_active = 1 
+      AND m.category IN (${placeholders})
+    ORDER BY RANDOM()
+    LIMIT 1
+  `);
+  const repeatQuiz = repeatQuizStmt.get(...categories);
+  if (repeatQuiz) return repeatQuiz;
+
+  // 4. Fallback jika track tidak memiliki kuis sama sekali
   return db.prepare('SELECT * FROM quizzes WHERE is_active = 1 ORDER BY RANDOM() LIMIT 1').get() || null;
 }
 

@@ -923,7 +923,13 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
       markModuleProgress(user.id, nextModule.id, 'SENT');
       touchUserActivity(user.jid);
       updateUserState(user.jid, 'IDLE', { last_module_id: nextModule.id });
-      const moduleBody = (isEnglishUser && nextModule.wa_text_body_en) ? nextModule.wa_text_body_en : nextModule.wa_text_body;
+      let moduleBody = (isEnglishUser && nextModule.wa_text_body_en) ? nextModule.wa_text_body_en : nextModule.wa_text_body;
+      if (nextModule.is_repeat) {
+        const reviewNotice = isEnglishUser
+          ? `🔄 *[Curriculum Review / Material Loop]*\n_You have completed all modules in your track! Reviewing lessons from the beginning to reinforce your mastery:_\n\n`
+          : `🔄 *[Review / Pengulangan Kurikulum]*\n_Anda telah menyelesaikan seluruh modul di track ini! Mengulang pembahasan dari awal untuk memperkuat pemahaman Anda:_\n\n`;
+        moduleBody = reviewNotice + moduleBody;
+      }
       await reply({ text: `${moduleBody}${getLoopbackFooter(user)}` });
       return;
     }

@@ -87,7 +87,7 @@ async function release() {
   }
 
   // 2. Run Test Suite
-  console.log('🧪 [Release Manager] Running verification test suites (test_scenario.js, test_pmp_scenario.js, test_adaptive_language.js)...');
+  console.log('🧪 [Release Manager] Running verification test suites (test_scenario.js, test_pmp_scenario.js, test_adaptive_language.js, test-track-filtering.js)...');
   try {
     run('node test_scenario.js', { stdio: 'inherit' });
     console.log('✅ [Release Manager] Core test scenario passed.');
@@ -95,6 +95,8 @@ async function release() {
     console.log('✅ [Release Manager] PMP test scenario passed.');
     run('node test_adaptive_language.js', { stdio: 'inherit' });
     console.log('✅ [Release Manager] Adaptive language test scenario passed.');
+    run('node test-track-filtering.js', { stdio: 'inherit' });
+    console.log('✅ [Release Manager] Track filtering & curriculum looping test passed.');
   } catch (tErr) {
     console.error('❌ [Release Manager] Tests failed! Release cancelled.');
     process.exit(1);

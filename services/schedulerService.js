@@ -62,7 +62,12 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
           const slotLabel = isEnglishUser
             ? (slotName === 'morning' ? 'Morning' : slotName === 'afternoon' ? 'Afternoon' : 'Evening')
             : (slotName === 'morning' ? 'Pagi' : slotName === 'afternoon' ? 'Siang' : 'Malam');
-          const header = `⏰ *[TelcoLearn ${slotLabel}]*\n\n`;
+          let header = `⏰ *[TelcoLearn ${slotLabel}]*\n\n`;
+          if (nextModule.is_repeat) {
+            header = isEnglishUser
+              ? `⏰ *[TelcoLearn ${slotLabel} - Curriculum Review]* 🔄\n_Track completed! Reviewing core concepts:_\n\n`
+              : `⏰ *[TelcoLearn ${slotLabel} - Review Kurikulum]* 🔄\n_Materi track selesai! Mengulang konsep inti:_\n\n`;
+          }
           const moduleBody = (isEnglishUser && nextModule.wa_text_body_en) ? nextModule.wa_text_body_en : nextModule.wa_text_body;
           const fullMessage = header + moduleBody;
 
