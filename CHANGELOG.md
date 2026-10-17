@@ -1,5 +1,10 @@
 # TelcoLearn Changelog
 
+## [v3.6.0] - 2026-10-17
+
+### Highlights
+Strict focus_track module and quiz isolation with curriculum looping
+
 ## [v3.5.0] - 2026-10-16
 
 ### Highlights
