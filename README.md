@@ -119,7 +119,7 @@ Perintah pemantauan PM2:
 - `/lang [en/id]` : Mengganti bahasa bot (English / Bahasa Indonesia).
 - `/batal` : Membatalkan sesi kuis atau pencatatan yang sedang aktif.
 - `/streak` : Melihat rekor hari belajar berturut-turut & pencapaian.
-- `/track [1/2/3/4]` : Mengubah fokus materi (4G/5G QA, Drive Test, ML Telco, Log Analysis).
+- `/track [1-5]` : Mengubah fokus materi (4G/5G QA, Drive Test, ML Telco, Log Analysis, PMP).
 - `/jadwal [1/2/3]` : Mengubah waktu pengingat materi harian.
 - `/catat [isi]` : Menyimpan catatan teknis ke database lokal.
 - `/notes` : Melihat daftar catatan pribadi yang tersimpan.

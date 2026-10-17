@@ -884,8 +884,8 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
         await reply({ text: ack });
       } else {
         const prompt = isEnglishUser
-          ? `🎯 *SELECT STUDY TRACK:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Type */track 1*, */track 2*, */track 3*, or */track 4*_${getLoopbackFooter(user)}`
-          : `🎯 *PILIH JALUR FOKUS BELAJAR:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n\n_Ketik */track 1*, */track 2*, */track 3*, atau */track 4*_${getLoopbackFooter(user)}`;
+          ? `🎯 *SELECT STUDY TRACK:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n5️⃣ Telecom Project Management (PMP)\n\n_Type */track 1*, */track 2*, */track 3*, */track 4*, or */track 5*_${getLoopbackFooter(user)}`
+          : `🎯 *PILIH JALUR FOKUS BELAJAR:*\n\n1️⃣ 4G/5G Protocol QA\n2️⃣ Field & Drive Test\n3️⃣ ML Telco Testing\n4️⃣ Log Analysis\n5️⃣ Telecom Project Management (PMP)\n\n_Ketik */track 1*, */track 2*, */track 3*, */track 4*, atau */track 5*_${getLoopbackFooter(user)}`;
         await reply({ text: prompt });
       }
       return;
