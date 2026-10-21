@@ -445,6 +445,7 @@ TelcoLearn adalah platform micro-learning & asisten AI komprehensif untuk seluru
 • */top* - Papan peringkat streak komunitas (Shortcut: *7*)
 • */tantang* - Buat kartu tantangan kuis untuk grup WA (Shortcut: *8*)
 • */espresso* - Tips kilat 30 detik untuk insinyur telco (Shortcut: *9*)
+• */trivia* - Fakta teknis & wawasan telekomunikasi dari bank Q&A
 • */simulasi* - Membuat grafik simulasi RF / diagram visual
 • */lang [en/id]* - Mengganti bahasa bot (English / Bahasa Indonesia)
 • */track [1-5]* - Mengganti jalur fokus belajar (QA, Drive Test, ML, Log, PMP)
@@ -486,6 +487,7 @@ TelcoLearn is a micro-learning platform & AI technical companion for Telecom & N
 • */top* - Community Streak Leaderboard (Shortcut: *7*)
 • */challenge* - Generate quiz challenge card for WA groups (Shortcut: *8*)
 • */espresso* - 30-Second quick tip for telco engineers (Shortcut: *9*)
+• */trivia* - Quick technical trivia & insights generated from Q&A database
 • */sim* or */simulasi* - Render RF simulation graphs / diagrams
 • */lang [en/id]* - Switch bot language (English / Bahasa Indonesia)
 • */track [1-5]* - Switch study track (Protocol QA, Drive Test, ML, Log, PMP)

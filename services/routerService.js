@@ -38,6 +38,7 @@ const getFeedbackMetrics = db.getFeedbackMetrics || (() => ({ total: 0, pending:
 const updateFeedbackStatus = db.updateFeedbackStatus || (() => null);
 const clearLlmConversation = db.clearLlmConversation || (() => false);
 const getRecentLlmConversation = db.getRecentLlmConversation || (() => []);
+const getRandomTrivia = db.getRandomTrivia || (() => null);
 
 import {
   MESSAGES,
@@ -268,7 +269,7 @@ export async function handleIncomingMessage(sock, msg) {
         (myPnRaw && quotedParticipant.includes(myPnRaw)) ||
         (myLidRaw && quotedParticipant.includes(myLidRaw))
       );
-      const groupTriggerRegex = /^[!/](telco|tanya|ask|kuis|quiz|top|leaderboard|espresso|tip|pmp|help|bantuan|tantang|challenge|belajar|learn)\b/i;
+      const groupTriggerRegex = /^[!/](telco|tanya|ask|kuis|quiz|top|leaderboard|espresso|tip|trivia|pmp|help|bantuan|tantang|challenge|belajar|learn)\b/i;
       const hasGroupPrefix = groupTriggerRegex.test(rawText);
 
       // JIKA DI GRUP DAN TIDAK ADA TRIGGER SAMA SEKALI -> DROP SILENTLY (Anti-Spam & Zero Token Waste)
@@ -1147,6 +1148,21 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
       const tipText = getRandomEspressoTip(user.preferred_language);
       touchUserActivity(user.jid);
       await reply({ text: `${tipText}${isGroup ? '' : getLoopbackFooter(user)}` });
+      return;
+    }
+
+    // Shortcut /trivia -> Telco Trivia dari Q&A DB
+    if (lowerText === '/trivia' || lowerText === 'trivia' || lowerText === '!trivia') {
+      const triviaText = getRandomTrivia(null, user.preferred_language);
+      touchUserActivity(user.jid);
+      if (triviaText) {
+        await reply({ text: `${triviaText}${isGroup ? '' : getLoopbackFooter(user)}` });
+      } else {
+        const fallback = user.preferred_language === 'en'
+          ? "💡 *No trivia available right now.* Type */quiz* to challenge yourself!"
+          : "💡 *Trivia belum tersedia saat ini.* Ketik */quiz* untuk kuis interaktif!";
+        await reply({ text: `${fallback}${isGroup ? '' : getLoopbackFooter(user)}` });
+      }
       return;
     }
 

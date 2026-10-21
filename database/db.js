@@ -36,6 +36,17 @@ export function getDb() {
     dbInstance.exec('PRAGMA journal_mode = WAL;');
     dbInstance.exec('PRAGMA foreign_keys = ON;');
     dbInstance.exec('PRAGMA synchronous = NORMAL;');
+
+    // Auto-migrate user_module_progress updated_at column if not exists
+    try {
+      const cols = dbInstance.prepare("PRAGMA table_info(user_module_progress)").all();
+      if (cols && cols.length > 0 && !cols.some(c => c.name === 'updated_at')) {
+        dbInstance.exec("ALTER TABLE user_module_progress ADD COLUMN updated_at DATETIME;");
+        dbInstance.exec("UPDATE user_module_progress SET updated_at = COALESCE(completed_at, created_at, CURRENT_TIMESTAMP);");
+      }
+    } catch (e) {
+      // Table may not exist yet during initial setup
+    }
   }
   return dbInstance;
 }
@@ -301,34 +312,61 @@ export function getNextModuleForUser(userId) {
   if (nextMod) return nextMod;
 
   // 2. Jika seluruh modul dalam track ini sudah pernah dibaca (kurikulum habis),
-  // lakukan looping kurikulum: ulang dari modul pertama track yang SAMA (bukan melompat ke track lain)
+  // lakukan looping kurikulum berputar (round-robin / least recently sent):
+  // Ambil modul yang paling lama belum dikirim ulang (oldest updated_at)
   const repeatStmt = db.prepare(`
+    SELECT m.* 
+    FROM modules m
+    JOIN user_module_progress p ON m.id = p.module_id AND p.user_id = ?
+    WHERE m.is_active = 1 
+      AND m.category IN (${placeholders})
+    ORDER BY p.updated_at ASC, m.sequence_order ASC 
+    LIMIT 1
+  `);
+  const repeatMod = repeatStmt.get(userId, ...categories);
+  if (repeatMod) {
+    return { ...repeatMod, is_repeat: true };
+  }
+
+  // Fallback looping jika user belum memiliki record progress lengkap di track ini
+  const fallbackRepeat = db.prepare(`
     SELECT * 
     FROM modules 
     WHERE is_active = 1 
       AND category IN (${placeholders})
     ORDER BY sequence_order ASC 
     LIMIT 1
-  `);
-  const repeatMod = repeatStmt.get(...categories);
-  if (repeatMod) {
-    return { ...repeatMod, is_repeat: true };
+  `).get(...categories);
+  if (fallbackRepeat) {
+    return { ...fallbackRepeat, is_repeat: true };
   }
 
   // 3. Fallback jika tidak ada modul sama sekali pada track tersebut
   return db.prepare('SELECT * FROM modules WHERE is_active = 1 ORDER BY sequence_order ASC LIMIT 1').get() || null;
 }
 
+let lastMonotonicTime = 0;
+function getMonotonicIsoString() {
+  let now = Date.now();
+  if (now <= lastMonotonicTime) {
+    now = lastMonotonicTime + 1;
+  }
+  lastMonotonicTime = now;
+  return new Date(now).toISOString();
+}
+
 export function markModuleProgress(userId, moduleId, status = 'SENT') {
   const db = getDb();
+  const timestamp = getMonotonicIsoString();
   const stmt = db.prepare(`
-    INSERT INTO user_module_progress (user_id, module_id, status, completed_at)
-    VALUES (?, ?, ?, CASE WHEN ? = 'COMPLETED' THEN CURRENT_TIMESTAMP ELSE NULL END)
+    INSERT INTO user_module_progress (user_id, module_id, status, completed_at, updated_at)
+    VALUES (?, ?, ?, CASE WHEN ? = 'COMPLETED' THEN ? ELSE NULL END, ?)
     ON CONFLICT(user_id, module_id) DO UPDATE SET
       status = excluded.status,
-      completed_at = CASE WHEN excluded.status = 'COMPLETED' THEN CURRENT_TIMESTAMP ELSE user_module_progress.completed_at END
+      completed_at = CASE WHEN excluded.status = 'COMPLETED' THEN ? ELSE user_module_progress.completed_at END,
+      updated_at = ?
   `);
-  stmt.run(userId, moduleId, status, status);
+  stmt.run(userId, moduleId, status, status, timestamp, timestamp, timestamp, timestamp);
 }
 
 /**
@@ -976,5 +1014,55 @@ export async function updateFeedbackStatus(feedbackId, status, adminNotes = null
   `);
   stmt.run(status, adminNotes, feedbackId);
   return db.prepare('SELECT * FROM user_feedbacks WHERE id = ?').get(feedbackId);
+}
+
+/**
+ * ----------------------------------------------------
+ * TELCO TRIVIA & Q&A CONVERSION HELPERS
+ * ----------------------------------------------------
+ */
+
+export function formatQuizAsTrivia(quiz, lang = 'id') {
+  if (!quiz) return null;
+  const isEn = lang === 'en';
+  const question = (isEn && quiz.question_en) ? quiz.question_en : quiz.question;
+  const correctKey = 'option_' + (quiz.correct_option || 'a').toLowerCase();
+  const correctKeyEn = correctKey + '_en';
+  const answer = (isEn && quiz[correctKeyEn]) ? quiz[correctKeyEn] : (quiz[correctKey] || quiz.option_a);
+  const explanation = (isEn && quiz.explanation_en) ? quiz.explanation_en : quiz.explanation;
+
+  const categoryLabel = {
+    callflow: isEn ? '5G/LTE Signaling Call Flow' : 'Alur Pensinyalan 5G/LTE',
+    architecture: isEn ? 'Network Architecture & RF' : 'Arsitektur Jaringan & RF',
+    logfile: isEn ? 'OTA Protocol & Log Analysis' : 'Protokol Radio & Analisis Log',
+    ml: isEn ? 'AI & Machine Learning for Telco' : 'AI & Machine Learning Telco',
+    pmp: isEn ? 'Telecom Project Management (PMP)' : 'Telecom Project Management (PMP)'
+  }[quiz.category] || (quiz.category ? quiz.category.toUpperCase() : 'TELECOMMUNICATION');
+
+  if (isEn) {
+    return `💡 *[TelcoLearn Trivia / Did You Know?]* 📡\n*Category:* ${categoryLabel}\n\n❓ *Question:* \n${question}\n\n🎯 *Answer:* \n*${answer}*\n\n🔍 *Technical Insight:* \n${explanation}\n\n_Type */quiz* for interactive challenge or */trivia* for another insight! 🚀_`;
+  } else {
+    return `💡 *[TelcoLearn Trivia / Tahukah Anda?]* 📡\n*Kategori:* ${categoryLabel}\n\n❓ *Pertanyaan:* \n${question}\n\n🎯 *Jawabannya:* \n*${answer}*\n\n🔍 *Fakta Teknis:* \n${explanation}\n\n_Ketik */quiz* untuk kuis interaktif atau */trivia* untuk fakta menarik lainnya! 🚀_`;
+  }
+}
+
+export function getRandomTrivia(category = null, lang = 'id') {
+  const db = getDb();
+  let query = 'SELECT * FROM quizzes WHERE is_active = 1';
+  const params = [];
+  if (category) {
+    query += ' AND category = ?';
+    params.push(category);
+  }
+  query += ' ORDER BY RANDOM() LIMIT 1';
+  const quiz = db.prepare(query).get(...params);
+  if (!quiz) return null;
+  return formatQuizAsTrivia(quiz, lang);
+}
+
+export function getAllTrivia(lang = 'id') {
+  const db = getDb();
+  const quizzes = db.prepare('SELECT * FROM quizzes WHERE is_active = 1 ORDER BY id ASC').all();
+  return quizzes.map(q => formatQuizAsTrivia(q, lang));
 }
 

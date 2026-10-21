@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS user_module_progress (
     status TEXT DEFAULT 'SENT',                 -- 'SENT', 'READ', 'COMPLETED'
     completed_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE,
     UNIQUE(user_id, module_id)

@@ -97,6 +97,8 @@ async function release() {
     console.log('✅ [Release Manager] Adaptive language test scenario passed.');
     run('node test-track-filtering.js', { stdio: 'inherit' });
     console.log('✅ [Release Manager] Track filtering & curriculum looping test passed.');
+    run('node test-trivia.js', { stdio: 'inherit' });
+    console.log('✅ [Release Manager] Trivia & rotational looping test passed.');
   } catch (tErr) {
     console.error('❌ [Release Manager] Tests failed! Release cancelled.');
     process.exit(1);
