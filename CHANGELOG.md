@@ -1,5 +1,10 @@
 # TelcoLearn Changelog
 
+## [v3.7.0] - 2026-10-21
+
+### Highlights
+Fix curriculum review repeat loop bug and introduce Q&A Telco Trivia generator with /trivia command
+
 ## [v3.6.0] - 2026-10-17
 
 ### Highlights
