@@ -5,7 +5,7 @@
  *   node scripts/generate_trivia_modules.js --seed
  */
 
-import { getDb, formatQuizAsTrivia } from '../database/db.js';
+import { getDb, formatQuizAsTrivia, syncTriviaModulesFromQuizzes } from '../database/db.js';
 
 const isSeedMode = process.argv.includes('--seed');
 const isPreviewMode = process.argv.includes('--preview') || !isSeedMode;
@@ -29,48 +29,9 @@ if (isPreviewMode && !isSeedMode) {
 }
 
 if (isSeedMode) {
-  console.log(`\n🔄 [Trivia Seeder] Seeding ${quizzes.length} trivia modules into modules table...`);
-  const maxSeq = db.prepare('SELECT MAX(sequence_order) as m FROM modules').get()?.m || 20;
-  let addedCount = 0;
-
-  const insertStmt = db.prepare(`
-    INSERT OR REPLACE INTO modules (
-      module_code, category, level, title, tags, summary,
-      wa_text_body, sequence_order, is_active,
-      title_en, summary_en, wa_text_body_en
-    ) VALUES (
-      ?, ?, ?, ?, ?, ?,
-      ?, ?, 1,
-      ?, ?, ?
-    )
-  `);
-
-  for (let i = 0; i < quizzes.length; i++) {
-    const q = quizzes[i];
-    const code = `MOD-TRIVIA-${String(q.id).padStart(2, '0')}`;
-    const seq = maxSeq + i + 1;
-    const titleId = `Telco Trivia: ${q.question.slice(0, 50)}...`;
-    const titleEn = `Telco Trivia: ${(q.question_en || q.question).slice(0, 50)}...`;
-    const bodyId = formatQuizAsTrivia(q, 'id');
-    const bodyEn = formatQuizAsTrivia(q, 'en');
-
-    insertStmt.run(
-      code,
-      q.category,
-      'Semua Level',
-      titleId,
-      `trivia,quiz,${q.category}`,
-      `Fakta teknis & trivia singkat: ${titleId}`,
-      bodyId,
-      seq,
-      titleEn,
-      `Technical facts & brief trivia: ${titleEn}`,
-      bodyEn
-    );
-    addedCount++;
-  }
-
-  console.log(`✅ [Trivia Seeder] Successfully seeded ${addedCount} trivia modules into curriculum!`);
+  console.log(`\n🔄 [Trivia Seeder] Synchronizing ${quizzes.length} trivia modules into curriculum...`);
+  const { syncedCount } = syncTriviaModulesFromQuizzes(db);
+  console.log(`✅ [Trivia Seeder] Successfully synchronized ${syncedCount} trivia modules into curriculum!`);
   const totalMods = db.prepare('SELECT COUNT(*) as c FROM modules WHERE is_active = 1').get()?.c;
   console.log(`📊 Total Active Modules now in database: ${totalMods}`);
 }

@@ -47,6 +47,17 @@ export function getDb() {
     } catch (e) {
       // Table may not exist yet during initial setup
     }
+
+    // Auto-sync trivia modules from quizzes if any unmapped or missing
+    try {
+      const qCount = dbInstance.prepare("SELECT count(*) as count FROM quizzes WHERE is_active = 1").get()?.count || 0;
+      const tCount = dbInstance.prepare("SELECT count(*) as count FROM modules WHERE module_code LIKE 'MOD-TRIVIA-%' AND is_active = 1").get()?.count || 0;
+      if (qCount > 0 && tCount < qCount) {
+        syncTriviaModulesFromQuizzes(dbInstance);
+      }
+    } catch (e) {
+      // Quizzes or modules table may not exist yet during initial setup
+    }
   }
   return dbInstance;
 }
@@ -1064,5 +1075,67 @@ export function getAllTrivia(lang = 'id') {
   const db = getDb();
   const quizzes = db.prepare('SELECT * FROM quizzes WHERE is_active = 1 ORDER BY id ASC').all();
   return quizzes.map(q => formatQuizAsTrivia(q, lang));
+}
+
+/**
+ * Konversi otomatis seluruh bank soal & jawaban kuis di database menjadi modul trivia micro-learning.
+ * Menghasilkan kartu trivia terjadwal di tabel modules yang sinkron dengan kategori track.
+ */
+export function syncTriviaModulesFromQuizzes(customDb = null) {
+  const db = customDb || getDb();
+  const quizzes = db.prepare('SELECT * FROM quizzes WHERE is_active = 1 ORDER BY id ASC').all();
+  if (!quizzes || quizzes.length === 0) {
+    return { syncedCount: 0, totalQuizzes: 0 };
+  }
+
+  const upsertStmt = db.prepare(`
+    INSERT INTO modules (
+      module_code, category, level, title, tags, summary,
+      wa_text_body, sequence_order, is_active,
+      title_en, summary_en, wa_text_body_en
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?,
+      ?, ?, 1,
+      ?, ?, ?
+    )
+    ON CONFLICT(module_code) DO UPDATE SET
+      category = excluded.category,
+      title = excluded.title,
+      title_en = excluded.title_en,
+      tags = excluded.tags,
+      summary = excluded.summary,
+      summary_en = excluded.summary_en,
+      wa_text_body = excluded.wa_text_body,
+      wa_text_body_en = excluded.wa_text_body_en,
+      sequence_order = excluded.sequence_order,
+      is_active = 1
+  `);
+
+  let syncedCount = 0;
+  for (const q of quizzes) {
+    const code = `MOD-TRIVIA-${String(q.id).padStart(2, '0')}`;
+    const seq = 100 + q.id;
+    const titleId = `Telco Trivia: ${q.question.slice(0, 50)}...`;
+    const titleEn = `Telco Trivia: ${(q.question_en || q.question).slice(0, 50)}...`;
+    const bodyId = formatQuizAsTrivia(q, 'id');
+    const bodyEn = formatQuizAsTrivia(q, 'en');
+
+    upsertStmt.run(
+      code,
+      q.category,
+      'Semua Level',
+      titleId,
+      `trivia,quiz,${q.category}`,
+      `Fakta teknis & trivia singkat: ${titleId}`,
+      bodyId,
+      seq,
+      titleEn,
+      `Technical facts & brief trivia: ${titleEn}`,
+      bodyEn
+    );
+    syncedCount++;
+  }
+
+  return { syncedCount, totalQuizzes: quizzes.length };
 }
 

@@ -7,6 +7,7 @@ import {
   getRandomTrivia,
   getAllTrivia,
   formatQuizAsTrivia,
+  syncTriviaModulesFromQuizzes,
   getNextModuleForUser,
   markModuleProgress,
   getCategoriesForTrack
@@ -45,6 +46,12 @@ if (!Array.isArray(allTrivia) || allTrivia.length < 20) {
   throw new Error(`Expected at least 20 trivia items, got ${allTrivia.length}`);
 }
 console.log(`✅ [Pass] getAllTrivia retrieved ${allTrivia.length} trivia items.`);
+
+const syncResult = syncTriviaModulesFromQuizzes(db);
+if (syncResult.syncedCount < 20) {
+  throw new Error(`Expected at least 20 synced trivia modules, got ${syncResult.syncedCount}`);
+}
+console.log(`✅ [Pass] syncTriviaModulesFromQuizzes successfully auto-converted ${syncResult.syncedCount} Q&A into curriculum modules.`);
 
 // 2. Test Inbound Router /trivia command
 console.log('\n▶️ [Test 2] Router Command /trivia & !trivia...');

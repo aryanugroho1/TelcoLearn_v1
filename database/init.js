@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getDb } from './db.js';
+import { getDb, syncTriviaModulesFromQuizzes } from './db.js';
 import { applyBilingualMigrations } from '../scripts/migrate_bilingual.js';
 import { seedPmpTrack } from '../scripts/seed_pmp_track.js';
 import { backupDatabase } from '../scripts/db_backup.js';
@@ -95,6 +95,14 @@ export function initializeDatabase() {
     seedPmpTrack();
   } catch (pmpErr) {
     console.warn('ℹ️ Penyemaian PMP track dilewati:', pmpErr.message);
+  }
+
+  // 3.7. Konversi otomatis Bank Soal & Jawaban (Quizzes) menjadi Modul Trivia Terjadwal
+  try {
+    const { syncedCount } = syncTriviaModulesFromQuizzes(db);
+    console.log(`✅ [Auto-Trivia] Berhasil sinkronisasi ${syncedCount} modul trivia dari bank Q&A ke kurikulum.`);
+  } catch (tErr) {
+    console.warn('ℹ️ Sinkronisasi otomatis trivia dilewati:', tErr.message);
   }
 
   // 4. Migrasi Kolom Token Tracking & Model Name pada llm_conversation_logs
