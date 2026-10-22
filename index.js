@@ -468,7 +468,11 @@ function startWebServer() {
         return;
       }
 
-      const dbPath = path.join(__dirname, 'database', 'telcolearn.db');
+      const legacyDbPath = path.join(__dirname, 'database', 'telcolearn.db');
+      const dataDirDbPath = path.resolve(__dirname, 'data', 'telcolearn.db');
+      const dbPath = process.env.DATABASE_PATH 
+        ? path.resolve(__dirname, process.env.DATABASE_PATH)
+        : (fs.existsSync(dataDirDbPath) ? dataDirDbPath : legacyDbPath);
       if (fs.existsSync(dbPath)) {
         res.writeHead(200, {
           'Content-Type': 'application/x-sqlite3',

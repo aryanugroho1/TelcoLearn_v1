@@ -32,3 +32,5 @@ npm-debug.log*
 reports/*.html
 
 *.xlsx
+coolify_*.json
+coolify_*.db
