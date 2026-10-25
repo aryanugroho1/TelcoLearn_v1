@@ -158,7 +158,10 @@ async function startBot() {
 
   const sock = makeWASocket({
     version,
-    auth: state,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, logger)
+    },
     logger: pino({ level: 'silent' }),
     printQRInTerminal: !usePairingCode,
     browser: browserTuple,
@@ -219,6 +222,7 @@ async function startBot() {
     }
 
     if (connection === 'close') {
+      botConnectionStatus = 'connecting';
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const errorMsg = lastDisconnect?.error?.message || '';
 
@@ -242,8 +246,9 @@ async function startBot() {
 
       // KASUS 2: Status Code 401 (Unauthorized / Logged Out murni dari WhatsApp)
       if (statusCode === 401 || statusCode === DisconnectReason.loggedOut) {
+        botConnectionStatus = 'cooldown';
         console.error('\n🛑 [CRITICAL] Terdeteksi penolakan otorisasi (401 Unauthorized / Logged Out).');
-        console.error('🛑 Kemungkinan akun sedang dalam masa restriksi spam oleh WhatsApp.');
+        console.error('🛑 Kemungkinan sesi telah dikeluarkan dari perangkat WhatsApp atau akun terkena restriksi.');
         console.error('🛑 MENGHENTIKAN SEMUA PERCOBAAN REKONEKSI UNTUK KEAMANAN AKUN.\n');
         activateCooldown(5, 'Deteksi restriksi 401 Unauthorized oleh server WhatsApp');
         return;
@@ -255,7 +260,6 @@ async function startBot() {
         console.log('🎉 Handshake berhasil! Menyelesaikan sesi (Status 515)...');
         console.log('========================================================\n');
         reconnectAttempts = 0;
-        // Tutup listener socket lama sebelum membuka sesi yang baru
         try {
           sock.ev.removeAllListeners();
           sock.ws?.close();
@@ -264,17 +268,11 @@ async function startBot() {
         return;
       }
 
-      // KASUS 3: Gangguan jaringan biasa -> gunakan Exponential Backoff dengan Jitter
+      // KASUS 4: Gangguan jaringan / WebSocket timeout biasa -> JANGAN picu cooldown fatal!
+      // Terus lakukan rekoneksi otomatis dengan Exponential Backoff + Jitter dibatasi maksimal 60 detik
       reconnectAttempts++;
-      if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
-        console.error(`\n❌ Batas maksimal rekoneksi (${MAX_RECONNECT_ATTEMPTS}x) tercapai.`);
-        console.error('Menghentikan engine demi keamanan nomor WhatsApp.\n');
-        activateCooldown(1, `Batas maksimal rekoneksi jaringan tercapai (${MAX_RECONNECT_ATTEMPTS}x percobaan)`);
-        return;
-      }
-
-      const backoffDelay = calculateBackoff(reconnectAttempts);
-      console.log(`🔄 Percobaan rekoneksi ke-${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} dalam ${Math.round(backoffDelay / 1000)} detik...`);
+      const backoffDelay = calculateBackoff(Math.min(reconnectAttempts, 6), 3000, 60000);
+      console.log(`🔄 [Auto-Reconnect] Percobaan rekoneksi ke-${reconnectAttempts} dalam ${Math.round(backoffDelay / 1000)} detik...`);
       setTimeout(startBot, backoffDelay);
 
     } else if (connection === 'open') {
