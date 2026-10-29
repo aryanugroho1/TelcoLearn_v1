@@ -250,25 +250,40 @@ export function getUserLeaderboardRank(userId) {
 
 /**
  * Mengambil pengguna yang streak-nya berisiko padam hari ini untuk dikirimkan Streak Rescue Alert
+ * HANYA pengguna yang aktif kemarin (yesterday) dan belum aktif hari ini.
+ * Mencegah spam malam ke ratusan user lama yang sudah tidak memiliki streak aktif.
  */
 export function getUsersForStreakRescue() {
   const db = getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   return db.prepare(`
     SELECT * FROM users
     WHERE streak_count >= 1
-      AND (last_active_date IS NULL OR last_active_date != ?)
-  `).all(today);
+      AND last_active_date = ?
+      AND reminder_preference NOT IN ('none', 'off')
+  `).all(yesterday);
 }
 
+/**
+ * Mengambil pengguna aktif untuk pengiriman modul terjadwal harian (pagi/siang/malam)
+ * Proteksi Anti-Ban: Hanya kirim ke pengguna yang aktif dalam 14 hari terakhir
+ * atau pengguna baru dalam 7 hari terakhir. Hindari cold bulk push ke ratusan akun pasif.
+ */
 export function getActiveUsersForSlot(slot) {
   const db = getDb();
-  // slot: 'morning', 'afternoon', 'night'
+  const activeCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const newSignupCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
   const stmt = db.prepare(`
     SELECT * FROM users 
     WHERE reminder_preference IN ('all', ?)
+      AND (
+        (last_active_date IS NOT NULL AND last_active_date >= ?)
+        OR
+        (last_active_date IS NULL AND created_at >= ?)
+      )
   `);
-  return stmt.all(slot);
+  return stmt.all(slot, activeCutoff, newSignupCutoff);
 }
 
 /**

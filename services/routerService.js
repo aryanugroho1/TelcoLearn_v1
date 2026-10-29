@@ -340,7 +340,7 @@ export async function handleIncomingMessage(sock, msg) {
         current_state: (isGroup || isSelfChat || isFreeInquiry || isMediaInquiry) ? 'IDLE' : 'ONBOARDING_LANG',
         focus_track: 'protocol_qa',
         preferred_language: firstLang,
-        reminder_preference: 'all'
+        reminder_preference: isGroup ? 'off' : 'all'
       });
       console.log(`👋 [User Baru] Terdaftar: ${userDbKey} (State: ${user.current_state}, Lang: ${firstLang})`);
       if (!isGroup && !isSelfChat && !isFreeInquiry && !isMediaInquiry) {
