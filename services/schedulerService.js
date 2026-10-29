@@ -139,6 +139,12 @@ export async function dispatchStreakRescue(maybeSock) {
         }
       } catch (e) {
         console.error(`❌ Gagal mengirim streak rescue ke ${user.jid}:`, e.message);
+        const isClosed = e.message?.toLowerCase().includes('connection closed') ||
+                         (sock?.ws && typeof sock.ws.readyState === 'number' && sock.ws.readyState !== 1);
+        if (isClosed) {
+          console.warn('⚠️ [Streak Rescue] Terdeteksi koneksi WhatsApp terputus. Menghentikan antrean streak rescue demi keamanan.');
+          break;
+        }
       }
     }
   } catch (err) {

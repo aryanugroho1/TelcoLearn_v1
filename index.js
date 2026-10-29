@@ -376,9 +376,12 @@ function startWebServer() {
     const pathname = parsedUrl.pathname;
 
     if (pathname === '/health' || pathname === '/api/status') {
+      const isWsOpen = sockInstance?.ws?.readyState === 1;
+      const effectiveStatus = (botConnectionStatus === 'connected' && !isWsOpen) ? 'disconnected' : botConnectionStatus;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
-        status: botConnectionStatus,
+        status: effectiveStatus,
+        wsReadyState: sockInstance?.ws?.readyState ?? null,
         phone: botConnectedPhone,
         cooldown: botCooldownInfo,
         timestamp: new Date().toISOString()
@@ -486,6 +489,26 @@ function startWebServer() {
     }
 
 
+    // Endpoint reconnect cepat (tanpa hapus file sesi / tanpa scan QR ulang)
+    if (pathname === '/reconnect' || pathname === '/api/reconnect') {
+      console.log('🔄 [Web Portal] Tindakan Rekoneksi Cepat dipicu via browser. Merefresh socket WhatsApp...');
+      clearCooldown();
+      botCooldownInfo = null;
+      botConnectionStatus = 'connecting';
+      if (sockInstance) {
+        try {
+          sockInstance.ev.removeAllListeners();
+          sockInstance.ws?.terminate?.();
+          sockInstance.end?.();
+        } catch (e) {}
+        sockInstance = null;
+      }
+      setTimeout(startBot, 1000);
+      res.writeHead(302, { Location: '/' });
+      res.end();
+      return;
+    }
+
     // Endpoint reset / force QR baru
     if (req.url === '/reset' || req.url === '/api/reset') {
       console.log('🔄 [Web Portal] Tindakan Reset dipicu via web browser! Membersihkan lock dan sesi lama...');
@@ -568,15 +591,26 @@ function startWebServer() {
       <div class="badge badge-connected">🟢 BOT ONLINE & SIAP</div>
       <p style="font-size: 18px; color: #f8fafc; font-weight: 600;">Nomor Bot: +${botConnectedPhone}</p>
       <p>TelcoLearn engine aktif dan siap menjawab pertanyaan telekomunikasi, modul kurikulum, kuis, serta analisis RAG.</p>
+      <div style="margin-top: 18px;">
+        <a href="/reconnect" class="btn btn-primary" style="margin-right: 8px;">
+          🔄 Refresh Koneksi WhatsApp
+        </a>
+        <a href="/reset" class="btn btn-secondary" onclick="return confirm('Peringatan: Opsi ini akan menghapus sesi WhatsApp dan meminta Scan QR Code ulang. Lanjutkan?');">
+          ⚠️ Hapus Sesi & Scan QR Baru
+        </a>
+      </div>
     ` : isCooldown ? `
       <div class="badge badge-cooldown">🛑 PROTEKSI COOLDOWN AKTIF</div>
       <p style="color: #fca5a5;">Engine mendeteksi penolakan otorisasi 401 sebelumnya.<br>Sisa waktu proteksi otomatis: <strong>${botCooldownInfo?.remainingMinutes || 60} menit</strong>.</p>
       <div style="margin: 20px 0;">
-        <a href="/reset" class="btn btn-primary">
-          🔓 Reset Kunci & Munculkan QR Code Sekarang
+        <a href="/reconnect" class="btn btn-primary" style="margin-right: 8px;">
+          🔓 Coba Rekoneksi Sekarang
+        </a>
+        <a href="/reset" class="btn btn-secondary">
+          ⚡ Buat QR Code Baru
         </a>
       </div>
-      <p style="font-size: 12px; color: #94a3b8;">Klik tombol di atas untuk mereset kunci pengaman dan meminta QR Code baru ke WhatsApp.</p>
+      <p style="font-size: 12px; color: #94a3b8;">Klik tombol di atas untuk mereset kunci pengaman dan mencoba menyambungkan kembali ke WhatsApp.</p>
     ` : latestQRDataUrl ? `
       <div class="badge badge-qr">📲 SCAN QR CODE WHATSAPP</div>
       <p>Pindai QR Code di bawah menggunakan kamera WhatsApp di ponsel Anda:</p>
@@ -616,12 +650,15 @@ function startWebServer() {
       <div class="badge badge-connecting">⏳ MENGHUBUNGKAN KE WHATSAPP...</div>
       <p>Sedang memuat protokol Baileys. Kode QR atau Pairing Code akan muncul di sini secara otomatis dalam beberapa detik...</p>
       <div style="margin-top: 20px;">
-        <a href="/reset" class="btn btn-primary">
+        <a href="/reconnect" class="btn btn-primary" style="margin-right: 8px;">
+          🔄 Coba Rekoneksi
+        </a>
+        <a href="/reset" class="btn btn-secondary">
           ⚡ Paksa Buat QR Code Baru
         </a>
       </div>
     `}
-    <div class="footer">TelcoLearn Engine v3.0.0 &bull; Powered by Baileys & Gemini 3 Flash</div>
+    <div class="footer">TelcoLearn Engine v3.7.0 &bull; Powered by Baileys & Gemini 3 Flash</div>
   </div>
 </body>
 </html>`;
@@ -640,3 +677,28 @@ startWebServer();
 startBot().catch((err) => {
   console.error('❌ Fatal error saat inisialisasi TelcoLearn Engine:', err);
 });
+
+// 7. Watchdog Deteksi Zombie Socket (Otomatis Rekoneksi jika socket terputus)
+setInterval(() => {
+  const cooldown = isCooldownActive();
+  if (cooldown) return;
+
+  if (botConnectionStatus === 'connected' && sockInstance) {
+    const ws = sockInstance.ws;
+    const wsState = ws?.readyState;
+    // 0: CONNECTING, 1: OPEN, 2: CLOSING, 3: CLOSED
+    if (wsState === 2 || wsState === 3 || (wsState === undefined && !sockInstance.user)) {
+      console.warn(`⚠️ [Socket Watchdog] Terdeteksi socket WhatsApp non-aktif (readyState: ${wsState}). Memicu pemulihan otomatis...`);
+      botConnectionStatus = 'connecting';
+      if (sockInstance) {
+        try {
+          sockInstance.ev.removeAllListeners();
+          sockInstance.ws?.terminate?.();
+          sockInstance.end?.();
+        } catch (e) {}
+        sockInstance = null;
+      }
+      setTimeout(startBot, 2000);
+    }
+  }
+}, 25000);
