@@ -251,6 +251,19 @@ async function startBot() {
         console.error('🛑 Kemungkinan sesi telah dikeluarkan dari perangkat WhatsApp atau akun terkena restriksi.');
         console.error('🛑 MENGHENTIKAN SEMUA PERCOBAAN REKONEKSI UNTUK KEAMANAN AKUN.\n');
         activateCooldown(5, 'Deteksi restriksi 401 Unauthorized oleh server WhatsApp');
+
+        // Memicu Notifikasi Alarm Darurat ke Admin (Email / Webhook)
+        try {
+          const { sendAdminCriticalAlert } = await import('./services/reportingService.js');
+          await sendAdminCriticalAlert({
+            title: 'Sesi WhatsApp Bot Terputus (401 Logged Out)',
+            reason: 'Sesi WhatsApp di-logout dari perangkat HP pengguna atau dicabut oleh server WhatsApp.',
+            actionUrl: 'http://100.122.15.96:3005/reset'
+          });
+        } catch (alertErr) {
+          console.warn('⚠️ Gagal memicu alarm admin:', alertErr.message);
+        }
+
         return;
       }
 

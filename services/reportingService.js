@@ -269,3 +269,68 @@ export async function sendDailyEmailReport(recipientEmail = null) {
     };
   }
 }
+
+/**
+ * Mengirim notifikasi darurat / alarm ke Admin (Email & Webhook)
+ * Dipicu ketika sesi 401 Unauthorized atau kegagalan fatal terjadi
+ */
+export async function sendAdminCriticalAlert({ title, reason, actionUrl = 'http://100.122.15.96:3005/reset' }) {
+  console.log(`🚨 [Admin Alert] Memproses alarm darurat: ${title}...`);
+  const targetEmail = process.env.ADMIN_EMAIL || 'arya.nugroho.works1@gmail.com';
+  const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+
+  // 1. Kirim via Email SMTP jika kredensial tersedia
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  if (smtpUser && smtpPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+        secure: parseInt(process.env.SMTP_PORT || '587', 10) === 465,
+        auth: { user: smtpUser, pass: smtpPass }
+      });
+
+      await transporter.sendMail({
+        from: `"TelcoLearn System Watchdog" <${smtpUser}>`,
+        to: targetEmail,
+        subject: `🚨 [ALARM TELCOLEARN] ${title}`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px;">
+            <h2 style="color: #e11d48; margin-top: 0;">🚨 TelcoLearn WhatsApp Gateway Alert</h2>
+            <p><strong>Waktu Kejadian:</strong> ${timestamp} WIB</p>
+            <p><strong>Isu:</strong> ${title}</p>
+            <p><strong>Penyebab:</strong> ${reason}</p>
+            <div style="margin: 20px 0;">
+              <a href="${actionUrl}" style="background: #e11d48; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                ⚡ Buka Portal & Scan QR Baru Sekarang
+              </a>
+            </div>
+            <p style="font-size: 12px; color: #881337;">Aksi manual diperlukan: Silakan scan QR code ulang dari ponsel untuk mengaktifkan kembali bot.</p>
+          </div>
+        `
+      });
+      console.log(`✅ [Admin Alert] Email peringatan darurat berhasil dikirim ke ${targetEmail}`);
+    } catch (mailErr) {
+      console.warn(`⚠️ [Admin Alert] Gagal mengirim email alert:`, mailErr.message);
+    }
+  }
+
+  // 2. Kirim via Webhook (Discord / Telegram) jika URL terkonfigurasi
+  const webhookUrl = process.env.ALERT_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
+  if (webhookUrl) {
+    try {
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `🚨 **[TELCOLEARN ALARM]** ${title}\n📅 Waktu: ${timestamp} WIB\n⚠️ Penyebab: ${reason}\n👉 Tindakan: [Buka Portal & Scan QR Baru](${actionUrl})`
+        })
+      });
+      console.log(`✅ [Admin Alert] Notifikasi webhook darurat berhasil dikirim.`);
+    } catch (whErr) {
+      console.warn(`⚠️ [Admin Alert] Gagal mengirim webhook alert:`, whErr.message);
+    }
+  }
+}
+
