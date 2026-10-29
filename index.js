@@ -510,7 +510,7 @@ function startWebServer() {
     }
 
     // Endpoint reset / force QR baru
-    if (req.url === '/reset' || req.url === '/api/reset') {
+    if (pathname === '/reset' || pathname === '/api/reset' || req.url === '/reset' || req.url === '/api/reset') {
       console.log('🔄 [Web Portal] Tindakan Reset dipicu via web browser! Membersihkan lock dan sesi lama...');
       clearCooldown();
       botCooldownInfo = null;
