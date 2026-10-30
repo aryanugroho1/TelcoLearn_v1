@@ -20,7 +20,8 @@ import {
   sendSafeScheduled, 
   simulateHumanPresence, 
   randomizeMessageContent,
-  isCooldownActive 
+  isCooldownActive,
+  isSocketReady
 } from './antiBanService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -347,6 +348,7 @@ export async function startSerialBroadcast(getSocketFn, options = {}) {
   }
 
   state.status = 'running';
+  state.last_error = null;
   state.total_targets = allTargetUsers.length;
   if (!state.started_at) {
     state.started_at = new Date().toISOString();
@@ -374,10 +376,10 @@ export async function startSerialBroadcast(getSocketFn, options = {}) {
         const user = pendingUsers[i];
         const userJid = user.jid || `${user.phone_number}@s.whatsapp.net`;
 
-        // 1. Cek kesehatan socket
+        // 1. Cek kesehatan socket (mendukung Baileys WebSocketClient wrapper & raw socket)
         const sock = typeof getSocketFn === 'function' ? getSocketFn() : getSocketFn;
-        if (!sock || (sock.ws && sock.ws.readyState !== 1)) {
-          console.warn(`⚠️ [Broadcast] Socket WhatsApp tidak terhubung (readyState !== 1). Menjeda broadcast demi keamanan.`);
+        if (!isSocketReady(sock)) {
+          console.warn(`⚠️ [Broadcast] Socket WhatsApp tidak terhubung atau belum siap. Menjeda broadcast demi keamanan.`);
           state.status = 'paused';
           state.last_error = 'Socket disconnected or not ready';
           saveBroadcastState(state);

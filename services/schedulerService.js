@@ -15,7 +15,7 @@ const getNextModuleForUser = db.getNextModuleForUser || (() => null);
 const markModuleProgress = db.markModuleProgress || (() => null);
 const getUsersForStreakRescue = db.getUsersForStreakRescue || (() => []);
 
-import { sendSafeScheduled } from './antiBanService.js';
+import { sendSafeScheduled, isSocketReady } from './antiBanService.js';
 import { sendDailyEmailReport } from './reportingService.js';
 
 let activeCronJobs = [];
@@ -43,9 +43,9 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
     return;
   }
 
-  // Cek kesiapan WebSocket (readyState 1 = OPEN) jika property ws tersedia
-  if (sock.ws && typeof sock.ws.readyState === 'number' && sock.ws.readyState !== 1) {
-    console.warn(`⚠️ [Scheduler] WebSocket Baileys sedang tidak aktif (readyState: ${sock.ws.readyState}). Melewati dispatch slot ${slotName}.`);
+  // Cek kesiapan WebSocket Baileys
+  if (!isSocketReady(sock)) {
+    console.warn(`⚠️ [Scheduler] WebSocket Baileys sedang tidak aktif. Melewati dispatch slot ${slotName}.`);
     return;
   }
 
@@ -117,8 +117,7 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
 
         // Jika error Connection Closed, periksa apakah koneksi socket terputus
         const activeSock = typeof currentSocketGetter === 'function' ? currentSocketGetter() : currentSocketGetter;
-        const isClosed = userErr.message?.toLowerCase().includes('connection closed') ||
-                         (activeSock?.ws && typeof activeSock.ws.readyState === 'number' && activeSock.ws.readyState !== 1);
+        const isClosed = userErr.message?.toLowerCase().includes('connection closed') || !isSocketReady(activeSock);
 
         if (isClosed) {
           console.warn(`⚠️ [Scheduler] Terdeteksi koneksi WhatsApp terputus di tengah pengiriman batch. Menunda sisa antrean slot ${slotName} demi keamanan akun.`);
@@ -163,8 +162,7 @@ export async function dispatchStreakRescue(maybeSock) {
         }
       } catch (e) {
         console.error(`❌ Gagal mengirim streak rescue ke ${user.jid}:`, e.message);
-        const isClosed = e.message?.toLowerCase().includes('connection closed') ||
-                         (sock?.ws && typeof sock.ws.readyState === 'number' && sock.ws.readyState !== 1);
+        const isClosed = e.message?.toLowerCase().includes('connection closed') || !isSocketReady(sock);
         if (isClosed) {
           console.warn('⚠️ [Streak Rescue] Terdeteksi koneksi WhatsApp terputus. Menghentikan antrean streak rescue demi keamanan.');
           break;

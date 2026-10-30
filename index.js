@@ -23,7 +23,7 @@ import QRCode from 'qrcode';
 import { initializeDatabase } from './database/init.js';
 import { handleIncomingMessage } from './services/routerService.js';
 import { initScheduler, stopScheduler } from './services/schedulerService.js';
-import { getStoredMessage, saveMessageToStore } from './services/antiBanService.js';
+import { getStoredMessage, saveMessageToStore, isSocketReady } from './services/antiBanService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -389,12 +389,12 @@ function startWebServer() {
     const pathname = parsedUrl.pathname;
 
     if (pathname === '/health' || pathname === '/api/status') {
-      const isWsOpen = sockInstance?.ws?.readyState === 1;
-      const effectiveStatus = (botConnectionStatus === 'connected' && !isWsOpen) ? 'disconnected' : botConnectionStatus;
+      const isWsOpen = sockInstance ? isSocketReady(sockInstance) : false;
+      const effectiveStatus = (botConnectionStatus === 'connected' && sockInstance && !isWsOpen) ? 'disconnected' : botConnectionStatus;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: effectiveStatus,
-        wsReadyState: sockInstance?.ws?.readyState ?? null,
+        wsReadyState: sockInstance?.ws?.socket?.readyState ?? sockInstance?.ws?.readyState ?? (isWsOpen ? 1 : null),
         phone: botConnectedPhone,
         cooldown: botCooldownInfo,
         timestamp: new Date().toISOString()

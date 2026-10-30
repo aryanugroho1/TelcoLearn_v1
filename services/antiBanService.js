@@ -383,3 +383,28 @@ export function sendSafeScheduled(sock, jid, content) {
     });
   });
 }
+
+/**
+ * Memeriksa kesiapan dan status aktif koneksi Baileys WebSocket
+ * Mendukung Baileys WebSocketClient wrapper (.isOpen), raw socket (.socket.readyState),
+ * dan fallback function check (.sendMessage).
+ */
+export function isSocketReady(sock) {
+  if (!sock) return false;
+  if (sock.ws) {
+    if (typeof sock.ws.isOpen === 'boolean') {
+      return sock.ws.isOpen;
+    }
+    if (sock.ws.socket && typeof sock.ws.socket.readyState === 'number') {
+      return sock.ws.socket.readyState === 1;
+    }
+    if (typeof sock.ws.readyState === 'number') {
+      return sock.ws.readyState === 1;
+    }
+    if (sock.ws.isClosed === true) {
+      return false;
+    }
+  }
+  return typeof sock.sendMessage === 'function';
+}
+
