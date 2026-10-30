@@ -103,6 +103,11 @@ export function normalizePhone(phone) {
     return clean;
   }
 
+  // Japanese domestic mobile numbers starting with 070, 080, 090 (11 digits, e.g. 07090934764)
+  if (/^0[789]0\d{8}$/.test(clean)) {
+    return '81' + clean.slice(1);
+  }
+
   // If starts with 0 (national Indonesian format e.g. 0812...), convert national 0 to 62
   if (clean.startsWith('0')) {
     return '62' + clean.slice(1);
@@ -1243,16 +1248,20 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
       const configuredAdmins = [
         process.env.ADMIN_PHONE_NUMBER,
         process.env.BOT_PHONE_NUMBER,
-        '817090934764'
+        '817090934764',
+        '07090934764',
+        '7090934764'
       ].filter(Boolean).flatMap(p => p.split(',')).map(p => p.replace(/\D/g, '').trim()).filter(Boolean);
 
       const isSenderAdmin = isSelfChat || configuredAdmins.some(adminNum => {
+        const cleanAdmin = adminNum.replace(/^0/, '');
         return (
           phoneNumber === adminNum ||
           cleanSenderPhone === adminNum ||
           user?.phone_number === adminNum ||
-          senderJid.startsWith(adminNum) ||
-          senderJid.includes(adminNum)
+          phoneNumber.includes(cleanAdmin) ||
+          phoneNumber.endsWith(cleanAdmin) ||
+          senderJid.includes(cleanAdmin)
         );
       });
 
@@ -1306,6 +1315,191 @@ Ketik */lang en* untuk beralih ke Bahasa Inggris atau */reset* untuk mengatur ul
       } else {
         await reply({ text: `${reportText}\n\n_💡 Ketik */admin report* untuk mengirim salinan dashboard ke email pribadi Anda._` });
       }
+      return;
+    }
+
+    // 6.6. ADMIN IN-CHAT BROADCAST CONTROLLER (/broadcast)
+    const isBroadcastCommand = (
+      lowerText === '/broadcast' || lowerText.startsWith('/broadcast') ||
+      lowerText === 'broadcast' || lowerText.startsWith('broadcast ')
+    );
+
+    if (isBroadcastCommand) {
+      const configuredAdmins = [
+        process.env.ADMIN_PHONE_NUMBER,
+        process.env.BOT_PHONE_NUMBER,
+        '817090934764',
+        '07090934764',
+        '7090934764'
+      ].filter(Boolean).flatMap(p => p.split(',')).map(p => p.replace(/\D/g, '').trim()).filter(Boolean);
+
+      const isSenderAdmin = isSelfChat || configuredAdmins.some(adminNum => {
+        const cleanAdmin = adminNum.replace(/^0/, '');
+        return (
+          phoneNumber === adminNum ||
+          cleanSenderPhone === adminNum ||
+          user?.phone_number === adminNum ||
+          phoneNumber.includes(cleanAdmin) ||
+          phoneNumber.endsWith(cleanAdmin) ||
+          senderJid.includes(cleanAdmin)
+        );
+      });
+
+      if (!isSenderAdmin) {
+        await reply({ text: '⛔ Perintah */broadcast* khusus untuk Administrator TelcoLearn.' });
+        return;
+      }
+
+      const { 
+        getBroadcastState, 
+        startSerialBroadcast, 
+        pauseBroadcast, 
+        resetBroadcastState, 
+        PRESET_TEMPLATES 
+      } = await import('./broadcastService.js');
+
+      const portalUrl = (process.env.WEB_PORTAL_URL || process.env.PUBLIC_URL || process.env.COOLIFY_URL || 'http://100.122.15.96:3005').replace(/\/$/, '');
+
+      // Parse argument setelah /broadcast
+      const subCommand = lowerText.replace(/^\/?broadcast\s*/i, '').trim();
+
+      // Subcommand: /broadcast status
+      if (subCommand === 'status' || subCommand === 'stats' || subCommand === 'progres' || subCommand === 'progress') {
+        const state = getBroadcastState();
+        const total = state.total_targets || 278;
+        const sent = state.sent_count || 0;
+        const failed = state.failed_count || 0;
+        const pct = total > 0 ? Math.round((sent / total) * 100) : 0;
+        const remaining = total - sent;
+        const eta = Math.round((remaining * 11 + Math.floor(remaining / 10) * 35) / 60);
+
+        let statusText = `📊 *STATUS SERIAL BROADCAST TERKINI*\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        statusText += `• *Status Mesin:* ${state.status.toUpperCase()}\n`;
+        statusText += `• *Progres Terkirim:* *${sent}* / ${total} (*${pct}%*)\n`;
+        statusText += `• *Gagal:* ${failed}\n`;
+        statusText += `• *Estimasi Sisa Waktu:* ~${eta > 0 ? eta + ' Menit' : 'Selesai'}\n`;
+        if (state.last_sent_at) {
+          statusText += `• *Aktivitas Terakhir:* ${new Date(state.last_sent_at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB\n`;
+        }
+        if (state.last_error) {
+          statusText += `• *Catatan Error:* ${state.last_error}\n`;
+        }
+        statusText += `\n💡 _Ketik */broadcast pause* untuk jeda, */broadcast resume* untuk lanjut, atau buka ${portalUrl}/broadcast di browser._`;
+
+        await reply({ text: statusText });
+        return;
+      }
+
+      // Subcommand: /broadcast pause
+      if (subCommand === 'pause' || subCommand === 'jeda' || subCommand === 'stop') {
+        const res = pauseBroadcast();
+        await reply({ text: `⏸️ *[BROADCAST DIJEDA]*\n${res.message}\n\nKetik */broadcast resume* kapan saja untuk melanjutkan sisa antrean.` });
+        return;
+      }
+
+      // Subcommand: /broadcast resume
+      if (subCommand === 'resume' || subCommand === 'lanjut') {
+        const res = await startSerialBroadcast(() => sock);
+        await reply({ text: `▶️ *[MELANJUTKAN BROADCAST]*\n${res.message}\n\nKetik */broadcast status* untuk memantau progres.` });
+        return;
+      }
+
+      // Subcommand: /broadcast reset
+      if (subCommand === 'reset') {
+        const res = resetBroadcastState();
+        await reply({ text: `🔄 *[RESET ANTREAN]*\n${res.message}` });
+        return;
+      }
+
+      // Subcommand: /broadcast start [preset]
+      if (subCommand.startsWith('start') || subCommand === 'kirim') {
+        let preset = 'apology_recovery';
+        if (subCommand.includes('new') || subCommand.includes('modul')) preset = 'new_modules';
+        else if (subCommand.includes('quiz') || subCommand.includes('kuis')) preset = 'quiz_challenge';
+        else if (subCommand.includes('maint') || subCommand.includes('server')) preset = 'maintenance';
+
+        const res = await startSerialBroadcast(() => sock, { preset });
+        if (!res.success) {
+          await reply({ text: `⚠️ ${res.message}` });
+          return;
+        }
+
+        const presetLabel = PRESET_TEMPLATES[preset]?.label || preset;
+        const confirmMsg = `🚀 *BROADCAST SERIAL TELAH DIMULAI!*
+━━━━━━━━━━━━━━━━━━━━━━━━
+📋 *Template:* ${presetLabel}
+👥 *Target:* 278 Pengguna (Serial FIFO)
+⏱️ *Estimasi Durasi:* ~50 - 65 Menit
+🛡️ *Pacing Anti-Ban:* Jitter 8-14s + Pause 35s per 10 pesan + Zero-Width Salt.
+
+💡 _Ketik */broadcast status* untuk memantau progres secara berkala._
+💡 _Ketik */broadcast pause* jika ingin menghentikan pengiriman sementara._
+🌐 _Monitor visual di browser:_ ${portalUrl}/broadcast`;
+
+        await reply({ text: confirmMsg });
+        return;
+      }
+
+      // Subcommand: /broadcast pesan [isi pesan kustom]
+      if (subCommand.startsWith('pesan ') || subCommand.startsWith('custom ') || subCommand.startsWith('text ')) {
+        const customText = rawText.replace(/^\/?broadcast\s+(pesan|custom|text)\s+/i, '').trim();
+        if (!customText || customText.length < 5) {
+          await reply({ text: `⚠️ Isi pesan kustom terlalu pendek.\nContoh: */broadcast pesan Halo rekan engineer, ada update materi 5G malam ini!*` });
+          return;
+        }
+
+        const res = await startSerialBroadcast(() => sock, { customTextId: customText, preset: 'custom' });
+        if (!res.success) {
+          await reply({ text: `⚠️ ${res.message}` });
+          return;
+        }
+
+        const confirmMsg = `🚀 *BROADCAST PESAN KUSTOM TELAH DIMULAI!*
+━━━━━━━━━━━━━━━━━━━━━━━━
+📝 *Cuplikan Pesan:*
+"${customText.slice(0, 120)}..."
+
+👥 *Target:* 278 Pengguna (Serial FIFO)
+⏱️ *Estimasi:* ~50 - 65 Menit
+💡 _Ketik */broadcast status* untuk melihat laporan terkirim._`;
+
+        await reply({ text: confirmMsg });
+        return;
+      }
+
+      // Default: Tampilkan Menu Broadcast Admin WhatsApp
+      const menuText = `📢 *MENU BROADCAST ADMIN TELCOLEARN* 📡
+Status Mesin: 🟢 ONLINE (Siap Kirim)
+Total Pengguna: *278 Pengguna Terdaftar*
+━━━━━━━━━━━━━━━━━━━━━━━━
+Ketik perintah di bawah untuk mengirim pesan serial:
+
+1️⃣ *Kirim Permohonan Maaf & Update 14 Hari (Default)*
+👉 Ketik: */broadcast start apology*
+_(Pesan permintaan maaf kendala koneksi + update aturan 14 hari + opsi stop/lanjut)_
+
+2️⃣ *Kirim Pengumuman Modul Baru*
+👉 Ketik: */broadcast start new_modules*
+
+3️⃣ *Kirim Tantangan Kuis Harian*
+👉 Ketik: */broadcast start quiz_challenge*
+
+4️⃣ *Kirim Pesan Kustom Bebas*
+👉 Ketik: */broadcast pesan [tulis pesan Anda]*
+_Contoh: /broadcast pesan Halo rekan-rekan engineer, malam ini ada pembaruan modul 5G!_
+
+5️⃣ *Cek Status & Progress Terkini*
+👉 Ketik: */broadcast status*
+
+6️⃣ *Jeda / Lanjutkan Pengiriman*
+👉 Ketik: */broadcast pause* (untuk jeda)
+👉 Ketik: */broadcast resume* (untuk lanjut)
+👉 Ketik: */broadcast reset* (untuk reset antrean)
+━━━━━━━━━━━━━━━━━━━━━━━━
+🌐 *Dashboard Web Visual di Browser:*
+👉 ${portalUrl}/broadcast`;
+
+      await reply({ text: menuText });
       return;
     }
 
