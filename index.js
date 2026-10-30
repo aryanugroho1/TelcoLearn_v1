@@ -539,8 +539,30 @@ function startWebServer() {
         }
 
         if (req.method === 'POST') {
+          let postBody = {};
+          try {
+            const chunks = [];
+            for await (const chunk of req) {
+              chunks.push(chunk);
+            }
+            if (chunks.length > 0) {
+              const raw = Buffer.concat(chunks).toString('utf-8');
+              if (raw.trim().startsWith('{')) {
+                postBody = JSON.parse(raw);
+              }
+            }
+          } catch (e) {}
+
+          const options = {
+            preset: postBody.preset || parsedUrl.searchParams.get('preset') || 'apology_recovery',
+            targetFilter: postBody.targetFilter || parsedUrl.searchParams.get('filter') || 'all',
+            customTextId: postBody.customTextId || parsedUrl.searchParams.get('text_id') || null,
+            customTextEn: postBody.customTextEn || parsedUrl.searchParams.get('text_en') || null,
+            forceReset: postBody.forceReset === true || parsedUrl.searchParams.get('forceReset') === 'true'
+          };
+
           if (action === 'start' || action === 'resume') {
-            const result = await startSerialBroadcast(() => sockInstance);
+            const result = await startSerialBroadcast(() => sockInstance, options);
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify(result, null, 2));
             return;
@@ -567,6 +589,19 @@ function startWebServer() {
         res.end(JSON.stringify({ error: bcErr.message }));
         return;
       }
+    }
+
+    // Endpoint Antarmuka Menu Broadcast Admin
+    if (pathname === '/broadcast' || pathname === '/admin/broadcast') {
+      const { renderBroadcastHtml } = await import('./services/broadcastUi.js');
+      const expectedSecret = process.env.ADMIN_EXPORT_SECRET || 'telcolearn-export-key-2026';
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(renderBroadcastHtml({
+        botConnectedPhone: botConnectedPhone || '628158722770',
+        isConnected: botConnectionStatus === 'connected',
+        secretKey: expectedSecret
+      }));
+      return;
     }
 
     // Endpoint reconnect cepat (tanpa hapus file sesi / tanpa scan QR ulang)

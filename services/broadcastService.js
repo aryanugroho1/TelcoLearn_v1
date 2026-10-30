@@ -1,7 +1,6 @@
 /**
-/**
  * TelcoLearn Serial One-Time Broadcast Service (Anti-Spam & Anti-Ban Protected)
- * Mengirimkan pesan pengumuman/pemulihan satu kali ke seluruh pengguna secara serial.
+ * Mengirimkan pesan pengumuman/pemulihan ke pengguna secara serial dan aman.
  *
  * Fitur Keamanan WhatsApp Anti-Ban:
  * 1. Pengiriman murni serial (1 per 1 pesan, non-paralel)
@@ -28,7 +27,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STATE_FILE_PATH = path.join(__dirname, '..', 'broadcast_state.json');
 
-const CAMPAIGN_ID = 'outage_recovery_update_20261030';
+const DEFAULT_CAMPAIGN_ID = 'outage_recovery_update_20261030';
 
 let isRunning = false;
 let shouldPause = false;
@@ -38,13 +37,131 @@ function sleep(ms) {
 }
 
 /**
+ * Daftar Preset Pesan Broadcast Standar
+ */
+export const PRESET_TEMPLATES = {
+  apology_recovery: {
+    id: 'apology_recovery',
+    label: '1. Permohonan Maaf & Update Kebijakan 14 Hari (Default)',
+    text_id: `Halo, *{name}*! 👋
+
+Sebelumnya, tim TelcoLearn memohon maaf yang sebesar-besarnya jika beberapa waktu lalu pesan atau pertanyaan Anda sempat tidak terbalas oleh bot karena adanya pemeliharaan dan kendala koneksi pada server. 🙏
+
+Kabar baiknya, kini *TelcoLearn Engine telah kembali normal, aktif, dan berjalan dengan sistem koneksi yang jauh lebih stabil!* 🚀
+
+Berikut beberapa pembaruan penting untuk kenyamanan belajar Anda:
+1️⃣ *Pengingat Belajar Harian Ramah Anti-Spam:*
+Pengingat materi tetap terjadwal untuk Anda. Untuk menjaga kenyamanan chat Anda, pengingat harian kini hanya akan dikirimkan kepada rekan engineer yang aktif dalam 14 hari terakhir. Jika 14 hari tidak ada interaksi, pengingat akan otomatis dijeda secara damai.
+
+2️⃣ *Pilihan Fleksibel:*
+• Ingin lanjut materi hari ini? Cukup balas *1* (atau */lanjut*).
+• Ingin jeda atau berhenti menerima jadwal harian? Balas */stop*.
+• Ingin kuis 60 detik? Balas */quiz*.
+
+Fitur konsultasi AI teknis (tanya teori 3GPP 4G/5G, analisis log pcap/qxdm, dan tips lapangan) tetap bisa Anda gunakan secara mandiri kapan saja.
+
+Terima kasih banyak atas dukungan dan kesabaran rekan-rekan engineer! Selamat kembali belajar bersama TelcoLearn. 📡✨`,
+    text_en: `Hello, *{name}*! 👋
+
+First of all, our sincere apologies if some of your messages or questions went unanswered recently due to unexpected server connection maintenance. 🙏
+
+We are glad to inform you that *TelcoLearn Engine is now fully restored, active, and running on a much more resilient connection!* 🚀
+
+Here are key updates designed for a better learning experience:
+1️⃣ *Clutter-Free Daily Reminders:*
+Your daily micro-learning schedule remains active. To keep your inbox clean and prevent spam, scheduled reminders will now only be sent to engineers active within the last 14 days. If there is no activity for 14 days, reminders will automatically pause.
+
+2️⃣ *Flexible Controls:*
+• Want today's lesson? Simply reply *1* (or */learn*).
+• Want to pause daily reminders? Reply */stop*.
+• Want a 60-second quiz challenge? Reply */quiz*.
+
+On-demand AI technical inquiries (3GPP 4G/5G concepts, log analysis, and field tips) remain available 24/7.
+
+Thank you very much for your patience and support! Happy learning with TelcoLearn. 📡✨`
+  },
+
+  new_modules: {
+    id: 'new_modules',
+    label: '2. Pengumuman Modul / Kurikulum Baru',
+    text_id: `Halo, *{name}*! 📚✨
+
+Ada kabar gembira dari kurikulum TelcoLearn! Modul studi baru seputar optimasi jaringan 5G NR dan analisis radio log telah ditambahkan ke sistem.
+
+Yuk tingkatkan kompetensi telekomunikasi Anda hari ini:
+👉 Balas *1* untuk langsung mengambil modul terbaru
+👉 Balas *2* untuk mencoba kuis evaluasi 60 detik
+👉 Balas *0* untuk melihat daftar topik lengkap
+
+Selamat belajar dan raih streak konsistensi terbaik Anda! 🚀`,
+    text_en: `Hello, *{name}*! 📚✨
+
+Exciting news from TelcoLearn! New micro-learning curriculum modules covering 5G NR optimization and protocol log analytics are now live.
+
+Boost your telecom engineering skills today:
+👉 Reply *1* to fetch the latest lesson
+👉 Reply *2* to take a 60-second challenge
+👉 Reply *0* to browse all tracks
+
+Happy learning and keep your streak alive! 🚀`
+  },
+
+  quiz_challenge: {
+    id: 'quiz_challenge',
+    label: '3. Tantangan Kuis & Streak Belajar',
+    text_id: `Halo, *{name}*! 🔥🎯
+
+Sudahkah Anda menguji pemahaman telekomunikasi hari ini?
+Papan peringkat (leaderboard) TelcoLearn sedang berlangsung ketat!
+
+Yuk luangkan waktu 60 detik untuk menjawab kuis radio/core hari ini:
+👉 Balas *2* (atau */quiz*) untuk mulai kuis sekarang
+👉 Balas *8* untuk menantang rekan engineer di grup Anda
+
+Jaga streak konsistensi belajar Anda sebelum tengah malam! 🚀`,
+    text_en: `Hello, *{name}*! 🔥🎯
+
+Have you tested your telecom knowledge today?
+The TelcoLearn leaderboard competition is heating up!
+
+Take 60 seconds to solve today's challenge:
+👉 Reply *2* (or */quiz*) to start now
+👉 Reply *8* to challenge your peers in group chats
+
+Keep your learning streak shining bright! 🚀`
+  },
+
+  maintenance: {
+    id: 'maintenance',
+    label: '4. Pemberitahuan Pemeliharaan Server (Maintenance)',
+    text_id: `Halo, *{name}*! 🛠️
+
+Pemberitahuan: Sistem TelcoLearn Engine akan melakukan peningkatan performa dan pemeliharaan server secara berkala untuk meningkatkan kecepatan respons AI dan stabilitas jaringan.
+
+Layanan akan tetap beroperasi normal setelah pembaruan selesai. Terima kasih atas pengertian dan kerjasamanya! 🙏📡`,
+    text_en: `Hello, *{name}*! 🛠️
+
+Notice: TelcoLearn Engine will undergo scheduled performance upgrades to enhance AI response speed and socket stability.
+
+All services will resume normal operation shortly. Thank you for your support! 🙏📡`
+  },
+
+  custom: {
+    id: 'custom',
+    label: '5. Pesan Kustom Bebas (Custom Announcement)',
+    text_id: `Halo, *{name}*!\n\n[Tuliskan pesan kustom Anda di sini]\n\nBalas *0* untuk menu utama TelcoLearn. 📡`,
+    text_en: `Hello, *{name}*!\n\n[Write your custom message here]\n\nReply *0* for TelcoLearn main menu. 📡`
+  }
+};
+
+/**
  * Baca state checkpoint dari disk
  */
 export function getBroadcastState() {
   if (fs.existsSync(STATE_FILE_PATH)) {
     try {
       const data = JSON.parse(fs.readFileSync(STATE_FILE_PATH, 'utf-8'));
-      if (data && data.campaign_id === CAMPAIGN_ID) {
+      if (data && data.campaign_id) {
         return data;
       }
     } catch (e) {
@@ -53,7 +170,9 @@ export function getBroadcastState() {
   }
 
   return {
-    campaign_id: CAMPAIGN_ID,
+    campaign_id: DEFAULT_CAMPAIGN_ID,
+    preset: 'apology_recovery',
+    target_filter: 'all',
     status: 'idle', // 'idle' | 'running' | 'paused' | 'completed' | 'failed'
     total_targets: 0,
     sent_count: 0,
@@ -80,66 +199,67 @@ export function saveBroadcastState(state) {
 }
 
 /**
- * Template Pesan Broadcast (Bilingual & Ramah Pengguna)
+ * Ambil daftar pengguna berdasarkan filter target
  */
-export function generateBroadcastText(user) {
+export function getTargetUsers(filter = 'all') {
+  const db = getDb();
+  const cutoff14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  let query = 'SELECT id, jid, phone_number, display_name, focus_track, preferred_language, last_active_date, created_at FROM users ';
+  let params = [];
+
+  if (filter === 'active') {
+    query += `WHERE (last_active_date IS NOT NULL AND last_active_date >= ?) OR (last_active_date IS NULL AND created_at >= ?) `;
+    params.push(cutoff14, cutoff14);
+  } else if (filter === 'dormant') {
+    query += `WHERE (last_active_date IS NOT NULL AND last_active_date < ?) OR (last_active_date IS NULL AND created_at < ?) `;
+    params.push(cutoff14, cutoff14);
+  } else if (filter.startsWith('track_')) {
+    const track = filter.replace('track_', '');
+    query += `WHERE focus_track = ? `;
+    params.push(track);
+  }
+
+  query += 'ORDER BY id ASC';
+  return db.prepare(query).all(...params);
+}
+
+/**
+ * Format teks pesan dengan mengganti placeholder {name}, {track}, dll.
+ */
+export function formatPersonalizedText(template, user) {
   const isEn = user.preferred_language === 'en';
   const name = user.display_name && user.display_name !== 'Pelajar Telco'
     ? user.display_name
     : (isEn ? 'Fellow Engineer' : 'Rekan Engineer');
 
-  if (isEn) {
-    return `Hello, *${name}*! 👋
+  return template
+    .replace(/{name}/g, name)
+    .replace(/{track}/g, user.focus_track || 'protocol_qa')
+    .replace(/{streak}/g, String(user.streak_count || 1));
+}
 
-First of all, our sincere apologies if some of your messages or questions went unanswered recently due to unexpected server connection maintenance. 🙏
+/**
+ * Generate teks pesan broadcast untuk pengguna tertentu
+ */
+export function generateBroadcastText(user, customTemplates = null) {
+  const isEn = user.preferred_language === 'en';
 
-We are glad to inform you that *TelcoLearn Engine is now fully restored, active, and running on a much more resilient connection!* 🚀
-
-Here are key updates designed for a better learning experience:
-1️⃣ *Clutter-Free Daily Reminders:*
-Your daily micro-learning schedule remains active. To keep your inbox clean and prevent spam, scheduled reminders will now only be sent to engineers active within the last 14 days. If there is no activity for 14 days, reminders will automatically pause.
-
-2️⃣ *Flexible Controls:*
-• Want today's lesson? Simply reply *1* (or */learn*).
-• Want to pause daily reminders? Reply */stop*.
-• Want a 60-second quiz challenge? Reply */quiz*.
-
-On-demand AI technical inquiries (3GPP 4G/5G concepts, log analysis, and field tips) remain available 24/7.
-
-Thank you very much for your patience and support! Happy learning with TelcoLearn. 📡✨`;
+  if (customTemplates && (customTemplates.text_id || customTemplates.text_en)) {
+    const rawTpl = (isEn && customTemplates.text_en) ? customTemplates.text_en : (customTemplates.text_id || customTemplates.text_en);
+    return formatPersonalizedText(rawTpl, user);
   }
 
-  return `Halo, *${name}*! 👋
-
-Sebelumnya, tim TelcoLearn memohon maaf yang sebesar-besarnya jika beberapa waktu lalu pesan atau pertanyaan Anda sempat tidak terbalas oleh bot karena adanya pemeliharaan dan kendala koneksi pada server. 🙏
-
-Kabar baiknya, kini *TelcoLearn Engine telah kembali normal, aktif, dan berjalan dengan sistem koneksi yang jauh lebih stabil!* 🚀
-
-Berikut beberapa pembaruan penting untuk kenyamanan belajar Anda:
-1️⃣ *Pengingat Belajar Harian Ramah Anti-Spam:*
-Pengingat materi tetap terjadwal untuk Anda. Untuk menjaga kenyamanan chat Anda, pengingat harian kini hanya akan dikirimkan kepada rekan engineer yang aktif dalam 14 hari terakhir. Jika 14 hari tidak ada interaksi, pengingat akan otomatis dijeda secara damai.
-
-2️⃣ *Pilihan Fleksibel:*
-• Ingin lanjut materi hari ini? Cukup balas *1* (atau */lanjut*).
-• Ingin jeda atau berhenti menerima jadwal harian? Balas */stop*.
-• Ingin kuis 60 detik? Balas */quiz*.
-
-Fitur konsultasi AI teknis (tanya teori 3GPP 4G/5G, analisis log pcap/qxdm, dan tips lapangan) tetap bisa Anda gunakan secara mandiri kapan saja.
-
-Terima kasih banyak atas dukungan dan kesabaran rekan-rekan engineer! Selamat kembali belajar bersama TelcoLearn. 📡✨`;
+  const preset = PRESET_TEMPLATES.apology_recovery;
+  const rawTpl = isEn ? preset.text_en : preset.text_id;
+  return formatPersonalizedText(rawTpl, user);
 }
 
 /**
  * Preview Broadcast dan statistik target
  */
-export function getBroadcastPreview() {
-  const db = getDb();
-  const allUsers = db.prepare(`
-    SELECT id, jid, phone_number, display_name, preferred_language, last_active_date, created_at 
-    FROM users 
-    ORDER BY id ASC
-  `).all();
-
+export function getBroadcastPreview(filter = 'all', customTemplates = null) {
+  const allUsers = getTargetUsers(filter);
   const state = getBroadcastState();
   const sentSet = new Set(state.sent_jids || []);
   const pendingUsers = allUsers.filter(u => {
@@ -147,54 +267,87 @@ export function getBroadcastPreview() {
     return !sentSet.has(userJid);
   });
 
-  const sampleIdUser = allUsers.find(u => u.preferred_language !== 'en') || allUsers[0] || { display_name: 'Budi Santoso', preferred_language: 'id' };
-  const sampleEnUser = allUsers.find(u => u.preferred_language === 'en') || { display_name: 'John Doe', preferred_language: 'en' };
+  const sampleIdUser = allUsers.find(u => u.preferred_language !== 'en') || allUsers[0] || { display_name: 'Budi Santoso', preferred_language: 'id', focus_track: 'protocol_qa' };
+  const sampleEnUser = allUsers.find(u => u.preferred_language === 'en') || { display_name: 'John Doe', preferred_language: 'en', focus_track: 'protocol_qa' };
 
   return {
-    campaign_id: CAMPAIGN_ID,
-    total_users_in_db: allUsers.length,
-    already_sent: sentSet.size,
+    campaign_id: state.campaign_id || DEFAULT_CAMPAIGN_ID,
+    target_filter: filter,
+    total_users_in_target: allUsers.length,
+    already_sent: allUsers.length - pendingUsers.length,
     pending_to_send: pendingUsers.length,
     status: state.status,
     estimated_duration_minutes: Math.round((pendingUsers.length * 11 + Math.floor(pendingUsers.length / 10) * 35) / 60),
-    sample_message_id: generateBroadcastText(sampleIdUser),
-    sample_message_en: generateBroadcastText(sampleEnUser)
+    sample_message_id: generateBroadcastText(sampleIdUser, customTemplates),
+    sample_message_en: generateBroadcastText(sampleEnUser, customTemplates),
+    presets: Object.keys(PRESET_TEMPLATES).map(k => ({
+      id: k,
+      label: PRESET_TEMPLATES[k].label,
+      text_id: PRESET_TEMPLATES[k].text_id,
+      text_en: PRESET_TEMPLATES[k].text_en
+    }))
   };
 }
 
 /**
- * Memulai broadcast serial di background
+ * Memulai broadcast serial di background dengan konfigurasi dinamis dari Admin
  */
-export async function startSerialBroadcast(getSocketFn) {
+export async function startSerialBroadcast(getSocketFn, options = {}) {
   if (isRunning) {
     return { success: false, message: 'Broadcast sudah sedang berjalan saat ini!' };
   }
 
-  const db = getDb();
-  const allUsers = db.prepare(`
-    SELECT id, jid, phone_number, display_name, preferred_language 
-    FROM users 
-    ORDER BY id ASC
-  `).all();
+  const filter = options.targetFilter || 'all';
+  const customTemplates = (options.customTextId || options.customTextEn) ? {
+    text_id: options.customTextId,
+    text_en: options.customTextEn
+  } : (options.preset && PRESET_TEMPLATES[options.preset] ? PRESET_TEMPLATES[options.preset] : null);
+
+  const campaignId = options.campaignId || options.preset || DEFAULT_CAMPAIGN_ID;
 
   let state = getBroadcastState();
-  const sentSet = new Set(state.sent_jids || []);
-  const failedSet = new Set(state.failed_jids || []);
 
-  const targetUsers = allUsers.filter(u => {
+  // Jika campaign berbeda dari yang tersimpan, atau ada flag forceReset
+  if (state.campaign_id !== campaignId || options.forceReset) {
+    state = {
+      campaign_id: campaignId,
+      preset: options.preset || 'custom',
+      target_filter: filter,
+      status: 'idle',
+      total_targets: 0,
+      sent_count: 0,
+      failed_count: 0,
+      current_index: 0,
+      started_at: null,
+      last_sent_at: null,
+      completed_at: null,
+      sent_jids: [],
+      failed_jids: [],
+      last_error: null
+    };
+  }
+
+  const allTargetUsers = getTargetUsers(filter);
+  const sentSet = new Set(state.sent_jids || []);
+
+  const pendingUsers = allTargetUsers.filter(u => {
     const userJid = u.jid || `${u.phone_number}@s.whatsapp.net`;
     return !sentSet.has(userJid);
   });
 
-  if (targetUsers.length === 0) {
+  if (pendingUsers.length === 0) {
     state.status = 'completed';
     state.completed_at = new Date().toISOString();
     saveBroadcastState(state);
-    return { success: true, message: 'Seluruh pengguna sudah menerima broadcast sebelumnya.', state };
+    return { 
+      success: true, 
+      message: 'Seluruh pengguna dalam kategori target ini sudah menerima pesan sebelumnya.', 
+      state 
+    };
   }
 
   state.status = 'running';
-  state.total_targets = allUsers.length;
+  state.total_targets = allTargetUsers.length;
   if (!state.started_at) {
     state.started_at = new Date().toISOString();
   }
@@ -203,14 +356,14 @@ export async function startSerialBroadcast(getSocketFn) {
   isRunning = true;
   shouldPause = false;
 
-  console.log(`\n📢 [Broadcast] Memulai Serial Broadcast ke ${targetUsers.length} pengguna tersisa (Total: ${allUsers.length})...`);
+  console.log(`\n📢 [Broadcast Admin] Memulai Serial Broadcast ke ${pendingUsers.length} pengguna tersisa (Filter: ${filter}, Total: ${allTargetUsers.length})...`);
 
-  // Jalankan di background secara asinkron agar tidak memblokir event loop
+  // Jalankan di background secara asinkron
   (async () => {
     try {
       let batchCount = 0;
 
-      for (let i = 0; i < targetUsers.length; i++) {
+      for (let i = 0; i < pendingUsers.length; i++) {
         if (shouldPause) {
           state.status = 'paused';
           saveBroadcastState(state);
@@ -218,7 +371,7 @@ export async function startSerialBroadcast(getSocketFn) {
           break;
         }
 
-        const user = targetUsers[i];
+        const user = pendingUsers[i];
         const userJid = user.jid || `${user.phone_number}@s.whatsapp.net`;
 
         // 1. Cek kesehatan socket
@@ -245,11 +398,11 @@ export async function startSerialBroadcast(getSocketFn) {
           await simulateHumanPresence(sock, userJid, null, 120);
 
           // 4. Buat teks pesan unik (zero-width hash perturbation)
-          const baseText = generateBroadcastText(user);
+          const baseText = generateBroadcastText(user, customTemplates);
           const randomizedText = randomizeMessageContent(baseText);
 
           // 5. Kirim via Antrean Safe Outbound
-          console.log(`[Broadcast ${state.sent_count + 1}/${allUsers.length}] Mengirim ke ${userJid} (${user.display_name})...`);
+          console.log(`[Broadcast ${state.sent_count + 1}/${allTargetUsers.length}] Mengirim ke ${userJid} (${user.display_name})...`);
           await sendSafeScheduled(sock, userJid, { text: randomizedText });
 
           // 6. Catat keberhasilan
@@ -267,7 +420,7 @@ export async function startSerialBroadcast(getSocketFn) {
           await sleep(jitterDelay);
 
           // 8. Jeda Batch Pacing (setiap 10 pesan, istirahat 35 detik)
-          if (batchCount % 10 === 0 && i < targetUsers.length - 1) {
+          if (batchCount % 10 === 0 && i < pendingUsers.length - 1) {
             console.log(`🛡️ [Broadcast Anti-Spam] Istirahat batch 35 detik setelah 10 pengiriman...`);
             await sleep(35000);
           }
@@ -287,7 +440,6 @@ export async function startSerialBroadcast(getSocketFn) {
             break;
           }
 
-          // Delay sebentar sebelum lanjut ke user berikutnya jika gagal
           await sleep(5000);
         }
       }
@@ -312,7 +464,7 @@ export async function startSerialBroadcast(getSocketFn) {
 
   return { 
     success: true, 
-    message: `Broadcast telah dimulai di background untuk ${targetUsers.length} pengguna tersisa.`,
+    message: `Broadcast serial telah dimulai di background untuk ${pendingUsers.length} pengguna (Filter: ${filter}).`,
     state 
   };
 }
@@ -336,7 +488,9 @@ export function resetBroadcastState() {
     return { success: false, message: 'Tidak dapat mereset broadcast saat sedang berjalan. Jeda terlebih dahulu.' };
   }
   const newState = {
-    campaign_id: CAMPAIGN_ID,
+    campaign_id: DEFAULT_CAMPAIGN_ID,
+    preset: 'apology_recovery',
+    target_filter: 'all',
     status: 'idle',
     total_targets: 0,
     sent_count: 0,

@@ -274,10 +274,12 @@ export async function sendDailyEmailReport(recipientEmail = null) {
  * Mengirim notifikasi darurat / alarm ke Admin (Email & Webhook)
  * Dipicu ketika sesi 401 Unauthorized atau kegagalan fatal terjadi
  */
-export async function sendAdminCriticalAlert({ title, reason, actionUrl = 'http://100.122.15.96:3005/reset' }) {
+export async function sendAdminCriticalAlert({ title, reason, actionUrl = null }) {
   console.log(`🚨 [Admin Alert] Memproses alarm darurat: ${title}...`);
   const targetEmail = process.env.ADMIN_EMAIL || 'arya.nugroho.works1@gmail.com';
   const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+  const portalUrl = (process.env.WEB_PORTAL_URL || process.env.PUBLIC_URL || process.env.COOLIFY_URL || 'http://100.122.15.96:3005').replace(/\/$/, '');
+  const finalActionUrl = actionUrl || `${portalUrl}/reset`;
 
   // 1. Kirim via Email SMTP jika kredensial tersedia
   const smtpUser = process.env.SMTP_USER;
@@ -296,17 +298,56 @@ export async function sendAdminCriticalAlert({ title, reason, actionUrl = 'http:
         to: targetEmail,
         subject: `🚨 [ALARM TELCOLEARN] ${title}`,
         html: `
-          <div style="font-family: sans-serif; padding: 20px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px;">
-            <h2 style="color: #e11d48; margin-top: 0;">🚨 TelcoLearn WhatsApp Gateway Alert</h2>
-            <p><strong>Waktu Kejadian:</strong> ${timestamp} WIB</p>
-            <p><strong>Isu:</strong> ${title}</p>
-            <p><strong>Penyebab:</strong> ${reason}</p>
-            <div style="margin: 20px 0;">
-              <a href="${actionUrl}" style="background: #e11d48; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-                ⚡ Buka Portal & Scan QR Baru Sekarang
-              </a>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 12px; max-width: 620px; margin: 0 auto; border: 1px solid #334155;">
+            <div style="border-bottom: 2px solid #e11d48; padding-bottom: 12px; margin-bottom: 16px;">
+              <h2 style="color: #f43f5e; margin: 0; font-size: 22px;">🚨 TelcoLearn WhatsApp Gateway Alert</h2>
+              <span style="font-size: 12px; color: #94a3b8;">Watchdog Monitor Otomatis &bull; Server Coolify</span>
             </div>
-            <p style="font-size: 12px; color: #881337;">Aksi manual diperlukan: Silakan scan QR code ulang dari ponsel untuk mengaktifkan kembali bot.</p>
+
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+              <tr><td style="padding: 6px 0; color: #94a3b8; width: 130px;">Waktu:</td><td style="padding: 6px 0; color: #f8fafc; font-weight: bold;">${timestamp} WIB</td></tr>
+              <tr><td style="padding: 6px 0; color: #94a3b8;">Insiden:</td><td style="padding: 6px 0; color: #fda4af; font-weight: bold;">${title}</td></tr>
+              <tr><td style="padding: 6px 0; color: #94a3b8;">Detail:</td><td style="padding: 6px 0; color: #cbd5e1;">${reason}</td></tr>
+            </table>
+
+            <!-- Kartu Akses QR Online Langsung -->
+            <div style="background: #1e293b; padding: 20px; border-radius: 10px; border: 1px solid #38bdf8; text-align: center; margin-bottom: 20px;">
+              <h3 style="margin-top: 0; color: #38bdf8; font-size: 17px;">📱 Akses Scan QR Code Online</h3>
+              <p style="color: #cbd5e1; font-size: 13px; line-height: 1.6; margin: 8px 0 16px 0;">
+                Klik tombol di bawah untuk langsung membuka halaman scan QR Code WhatsApp di web browser ponsel atau laptop Anda:
+              </p>
+
+              <div style="margin: 16px 0;">
+                <a href="${portalUrl}" style="background: #0284c7; color: #ffffff; padding: 13px 26px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.5);">
+                  📲 Buka Halaman Scan QR Code Online
+                </a>
+              </div>
+
+              <div style="margin-top: 14px; font-size: 12px; color: #94a3b8;">
+                Tautan Langsung: <a href="${portalUrl}" style="color: #38bdf8; word-break: break-all;">${portalUrl}</a><br>
+                Akses File Gambar QR: <a href="${portalUrl}/qr.png" style="color: #38bdf8;">${portalUrl}/qr.png</a>
+              </div>
+            </div>
+
+            <!-- Tombol Aksi Cepat Admin -->
+            <div style="margin-bottom: 20px;">
+              <p style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; font-weight: bold;">Aksi Kontrol Server Cepat:</p>
+              <div style="display: flex; gap: 8px;">
+                <a href="${portalUrl}/reconnect" style="background: #334155; color: #e2e8f0; padding: 8px 14px; text-decoration: none; border-radius: 6px; font-size: 12px; display: inline-block; margin-right: 6px;">
+                  🔄 Coba Rekoneksi Cepat
+                </a>
+                <a href="${finalActionUrl}" style="background: #881337; color: #fecdd3; padding: 8px 14px; text-decoration: none; border-radius: 6px; font-size: 12px; display: inline-block; margin-right: 6px;">
+                  ⚡ Hapus Sesi & Buat QR Baru
+                </a>
+                <a href="${portalUrl}/broadcast" style="background: #0369a1; color: #e0f2fe; padding: 8px 14px; text-decoration: none; border-radius: 6px; font-size: 12px; display: inline-block;">
+                  📢 Menu Broadcast Admin
+                </a>
+              </div>
+            </div>
+
+            <p style="font-size: 11px; color: #64748b; margin-top: 24px; border-top: 1px solid #1e293b; padding-top: 12px;">
+              Notifikasi darurat ini dikirimkan otomatis oleh TelcoLearn Watchdog Monitor ke admin ${targetEmail}.
+            </p>
           </div>
         `
       });
