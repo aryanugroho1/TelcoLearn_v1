@@ -267,23 +267,29 @@ export function getUsersForStreakRescue() {
 /**
  * Mengambil pengguna aktif untuk pengiriman modul terjadwal harian (pagi/siang/malam)
  * Proteksi Anti-Ban: Hanya kirim ke pengguna yang aktif dalam 14 hari terakhir
- * atau pengguna baru dalam 14 hari terakhir. Mencegah cold push ke akun pasif.
+/**
+ * Mengambil daftar pengguna aktif yang memenuhi syarat untuk slot jadwal pengingat tertentu
+ * ATURAN KEAMANAN ANTI-BAN KETAT:
+ * Hanya mengirim pengingat kepada pengguna yang aktif merespons ("lanjutkan"/interaksi)
+ * sejak broadcast permohonan maaf (30 Oktober 2026) atau pengguna baru yang mendaftar.
+ * Mencegah 100% cold push ke akun dorman/pasif.
  */
 export function getActiveUsersForSlot(slot) {
   const db = getDb();
-  const activeCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const newSignupCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // Cutoff ketat: Hanya mereka yang merespons / aktif sejak broadcast permintaan maaf (30 Oktober 2026)
+  const apologyCutoff = '2026-10-30';
 
   const stmt = db.prepare(`
     SELECT * FROM users 
     WHERE reminder_preference IN ('all', ?)
+      AND reminder_preference NOT IN ('off', 'none')
       AND (
         (last_active_date IS NOT NULL AND last_active_date >= ?)
         OR
         (last_active_date IS NULL AND created_at >= ?)
       )
   `);
-  return stmt.all(slot, activeCutoff, newSignupCutoff);
+  return stmt.all(slot, apologyCutoff, apologyCutoff);
 }
 
 /**

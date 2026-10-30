@@ -938,9 +938,27 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
       return;
     }
 
-    // Shortcut 1 -> /belajar, /learn, /lanjut, lanjut, /next, next, atau 1
-    if (lowerText === '/belajar' || lowerText === 'belajar' || lowerText === '/learn' || lowerText === 'learn' || lowerText === '1' || lowerText === '/lanjut' || lowerText === 'lanjut' || lowerText === '/next' || lowerText === 'next') {
+    // Shortcut 1 -> /belajar, /learn, /lanjut, lanjut, lanjutkan, /continue, next, atau 1
+    const isLearnOrContinue = (
+      lowerText === '1' ||
+      lowerText === '/belajar' || lowerText === 'belajar' ||
+      lowerText === '/learn' || lowerText === 'learn' ||
+      lowerText === '/lanjut' || lowerText === 'lanjut' ||
+      lowerText === '/lanjutkan' || lowerText === 'lanjutkan' ||
+      lowerText === '/continue' || lowerText === 'continue' ||
+      lowerText === '/next' || lowerText === 'next' ||
+      /\b(mau\s*lanjut|ya\s*lanjut|ok\s*lanjut|oke\s*lanjut|lanjut\s*dong|lanjut\s*kak|lanjutkan\s*materi)\b/i.test(lowerText)
+    );
+
+    if (isLearnOrContinue) {
       const isEnglishUser = user.preferred_language === 'en';
+
+      // Pastikan jadwal pengingat aktif jika sebelumnya off
+      if (user.reminder_preference === 'off' || user.reminder_preference === 'none') {
+        updateUserPreferences(user.jid, { reminder_preference: 'morning' });
+        user.reminder_preference = 'morning';
+      }
+
       const nextModule = getNextModuleForUser(user.id);
       if (!nextModule) {
         await reply({ text: `${MESSAGES.NO_MORE_MODULES(user)}${getLoopbackFooter(user)}` });
@@ -957,7 +975,16 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
           : `🔄 *[Review / Pengulangan Kurikulum]*\n_Anda telah menyelesaikan seluruh modul di track ini! Mengulang pembahasan dari awal untuk memperkuat pemahaman Anda:_\n\n`;
         moduleBody = reviewNotice + moduleBody;
       }
-      await reply({ text: `${moduleBody}${getLoopbackFooter(user)}` });
+
+      const isExplicitContinue = ['lanjut', 'lanjutkan', '/lanjut', '/lanjutkan', '1', 'continue'].includes(lowerText) ||
+                                 lowerText.includes('lanjut');
+      const optInHeader = isExplicitContinue
+        ? (isEnglishUser 
+            ? `✅ *Your daily learning reminders are confirmed active!*\nHere is today's module for you:\n\n`
+            : `✅ *Terima kasih! Jadwal pengingat belajar Anda telah dikonfirmasi aktif.* 🚀\nBerikut materi hari ini untuk Anda pelajari:\n\n`)
+        : '';
+
+      await reply({ text: `${optInHeader}${moduleBody}${getLoopbackFooter(user)}` });
       return;
     }
 
