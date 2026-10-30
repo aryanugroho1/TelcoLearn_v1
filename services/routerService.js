@@ -340,13 +340,17 @@ export async function handleIncomingMessage(sock, msg) {
         current_state: (isGroup || isSelfChat || isFreeInquiry || isMediaInquiry) ? 'IDLE' : 'ONBOARDING_LANG',
         focus_track: 'protocol_qa',
         preferred_language: firstLang,
-        reminder_preference: isGroup ? 'off' : 'all'
+        reminder_preference: 'all'
       });
       console.log(`👋 [User Baru] Terdaftar: ${userDbKey} (State: ${user.current_state}, Lang: ${firstLang})`);
+      touchUserActivity(user.jid);
       if (!isGroup && !isSelfChat && !isFreeInquiry && !isMediaInquiry) {
         await reply({ text: MESSAGES.WELCOME_LANGUAGE });
         return;
       }
+    } else {
+      // Perbarui keaktifan pengguna (jendela 14 hari) untuk setiap interaksi masuk
+      touchUserActivity(user.jid);
     }
 
     // 1.5. INBOUND IMAGE HANDLER (Gemini Multimodal Vision - Coverage, Drive Test, Spektrum)
@@ -929,8 +933,8 @@ Current language: *${user.preferred_language === 'en' ? 'English 🇬🇧' : 'Ba
       return;
     }
 
-    // Shortcut 1 -> /belajar atau /learn
-    if (lowerText === '/belajar' || lowerText === 'belajar' || lowerText === '/learn' || lowerText === 'learn' || lowerText === '1') {
+    // Shortcut 1 -> /belajar, /learn, /lanjut, lanjut, /next, next, atau 1
+    if (lowerText === '/belajar' || lowerText === 'belajar' || lowerText === '/learn' || lowerText === 'learn' || lowerText === '1' || lowerText === '/lanjut' || lowerText === 'lanjut' || lowerText === '/next' || lowerText === 'next') {
       const isEnglishUser = user.preferred_language === 'en';
       const nextModule = getNextModuleForUser(user.id);
       if (!nextModule) {

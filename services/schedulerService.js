@@ -58,6 +58,30 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
       try {
         const nextModule = getNextModuleForUser(user.id);
         const isEnglishUser = user.preferred_language === 'en';
+        const today = new Date().toISOString().slice(0, 10);
+        let daysInactive = 0;
+        if (user.last_active_date) {
+          const lastDate = new Date(user.last_active_date);
+          const todayDate = new Date(today);
+          daysInactive = Math.max(0, Math.round((todayDate - lastDate) / (1000 * 60 * 60 * 24)));
+        } else if (user.created_at) {
+          const createDate = new Date(user.created_at.slice(0, 10));
+          const todayDate = new Date(today);
+          daysInactive = Math.max(0, Math.round((todayDate - createDate) / (1000 * 60 * 60 * 24)));
+        }
+
+        // Jika mendekati batas 14 hari tidak aktif (7-13 hari), sertakan sapaan & konfirmasi kelanjutan pengingat
+        let reengagementPrefix = '';
+        if (daysInactive >= 7) {
+          reengagementPrefix = isEnglishUser
+            ? `🔔 *Hi ${user.display_name}! Would you like to keep receiving daily TelcoLearn reminders?*\n_We noticed you haven't been active for ${daysInactive} days. To keep your chat clutter-free, automatic reminders will pause after 14 days of inactivity._\n👉 Reply *1* (or */learn*) to continue learning\n👉 Reply */stop* to pause daily reminders anytime\n\n────────────────────────\n\n`
+            : `🔔 *Halo ${user.display_name}! Masih ingin melanjutkan pengingat belajar TelcoLearn?*\n_Kami perhatikan Anda belum aktif selama ${daysInactive} hari. Demi kenyamanan Anda, jadwal pengingat akan otomatis dijeda setelah 14 hari tanpa aktivitas._\n👉 Balas *1* (atau */lanjut*) untuk tetap menerima materi\n👉 Balas */stop* jika ingin menghentikan pengingat\n\n────────────────────────\n\n`;
+        }
+
+        const scheduledFooter = isEnglishUser
+          ? `\n\n────────────────────────\n💡 *Daily Quick Actions:*\n• Reply *1* (or */learn*) for next lesson\n• Reply *2* (or */quiz*) for daily quiz\n• Reply */stop* to pause daily reminders`
+          : `\n\n────────────────────────\n💡 *Aksi Belajar Harian:*\n• Balas *1* (atau */lanjut*) untuk materi berikutnya\n• Balas *2* (atau */quiz*) untuk kuis harian\n• Balas */stop* jika ingin menghentikan pengingat harian`;
+
         if (nextModule) {
           const slotLabel = isEnglishUser
             ? (slotName === 'morning' ? 'Morning' : slotName === 'afternoon' ? 'Afternoon' : 'Evening')
@@ -69,7 +93,7 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
               : `⏰ *[TelcoLearn ${slotLabel} - Review Kurikulum]* 🔄\n_Materi track selesai! Mengulang konsep inti:_\n\n`;
           }
           const moduleBody = (isEnglishUser && nextModule.wa_text_body_en) ? nextModule.wa_text_body_en : nextModule.wa_text_body;
-          const fullMessage = header + moduleBody;
+          const fullMessage = reengagementPrefix + header + moduleBody + scheduledFooter;
 
           await sendSafeScheduled(sock, user.jid, { text: fullMessage });
           markModuleProgress(user.id, nextModule.id, 'SENT');
@@ -77,8 +101,8 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
         } else {
           // Jika semua modul sudah selesai, kirim pemicu kuis
           const quizReminder = isEnglishUser
-            ? `⏰ *[TelcoLearn Review]*\n\nGood ${slotName === 'morning' ? 'morning' : slotName === 'afternoon' ? 'afternoon' : 'evening'}! You have completed the main curriculum modules. Keep your streak alive today! Type */quiz* for a 60-second challenge 🚀`
-            : `⏰ *[TelcoLearn Review]*\n\nSelamat ${slotName === 'morning' ? 'pagi' : slotName === 'afternoon' ? 'siang' : 'malam'}! Anda telah menyelesaikan materi kurikulum utama. Yuk pertahankan streak Anda hari ini! Ketik */quiz* untuk kuis evaluasi 🚀`;
+            ? `${reengagementPrefix}⏰ *[TelcoLearn Review]*\n\nGood ${slotName === 'morning' ? 'morning' : slotName === 'afternoon' ? 'afternoon' : 'evening'}! You have completed the main curriculum modules. Keep your streak alive today! Type */quiz* for a 60-second challenge 🚀${scheduledFooter}`
+            : `${reengagementPrefix}⏰ *[TelcoLearn Review]*\n\nSelamat ${slotName === 'morning' ? 'pagi' : slotName === 'afternoon' ? 'siang' : 'malam'}! Anda telah menyelesaikan materi kurikulum utama. Yuk pertahankan streak Anda hari ini! Ketik */quiz* untuk kuis evaluasi 🚀${scheduledFooter}`;
           await sendSafeScheduled(sock, user.jid, { text: quizReminder });
         }
 

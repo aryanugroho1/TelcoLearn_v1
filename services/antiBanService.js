@@ -119,14 +119,20 @@ export function calculateBackoff(attempt, baseDelayMs = 5000, maxDelayMs = 60000
  * ----------------------------------------------------
  */
 // Variasi whitespace tak kasat mata yang 100% aman bagi seluruh parser WhatsApp mobile
+let _randomizerCounter = 0;
 export function randomizeMessageContent(text) {
   if (!text || typeof text !== 'string') return text;
 
-  // Berikan variasi spasi acak di akhir teks (1-4 spasi acak) agar hash SHA-256 selalu unik
-  // tanpa merusak render teks di aplikasi WhatsApp Android maupun iOS
-  const count = Math.floor(Math.random() * 4) + 1;
-  const trailingWhitespace = ' '.repeat(count);
-  return text + trailingWhitespace;
+  // Berikan variasi zero-width acak dengan counter inkremental agar hash SHA-256 selalu 100% unik di setiap pemanggilan
+  _randomizerCounter = (_randomizerCounter + 1) % 10000;
+  const zwChars = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
+  let salt = '';
+  let n = _randomizerCounter + Math.floor(Math.random() * 1000);
+  for (let i = 0; i < 4; i++) {
+    salt += zwChars[n % zwChars.length];
+    n = Math.floor(n / zwChars.length);
+  }
+  return text + salt;
 }
 
 /**

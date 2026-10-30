@@ -267,12 +267,12 @@ export function getUsersForStreakRescue() {
 /**
  * Mengambil pengguna aktif untuk pengiriman modul terjadwal harian (pagi/siang/malam)
  * Proteksi Anti-Ban: Hanya kirim ke pengguna yang aktif dalam 14 hari terakhir
- * atau pengguna baru dalam 7 hari terakhir. Hindari cold bulk push ke ratusan akun pasif.
+ * atau pengguna baru dalam 14 hari terakhir. Mencegah cold push ke akun pasif.
  */
 export function getActiveUsersForSlot(slot) {
   const db = getDb();
   const activeCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const newSignupCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const newSignupCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const stmt = db.prepare(`
     SELECT * FROM users 

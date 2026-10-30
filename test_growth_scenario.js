@@ -123,16 +123,21 @@ async function testGrowthScenario() {
   if (memberUser.last_active_date !== today) {
     throw new Error('FAILED: User last_active_date should be updated to today!');
   }
+  if (memberUser.reminder_preference !== 'all') {
+    throw new Error('FAILED: Group member should be registered with reminder_preference all!');
+  }
+  console.log('✅ PASS: Group member correctly registered with reminder_preference = all.');
   console.log('✅ PASS: touchUserActivity successfully maintained user streak without forcing quiz.');
 
   console.log('\n=== TEST 4: EVENING STREAK RESCUE ALERT ===');
   // Create an at-risk user whose last activity was yesterday
   const rescueJid = '6289991112223@s.whatsapp.net';
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   db.prepare('DELETE FROM users WHERE jid = ?').run(rescueJid);
   db.prepare(`
     INSERT INTO users (jid, phone_number, display_name, current_state, focus_track, preferred_language, reminder_preference, streak_count, last_active_date)
-    VALUES (?, '6289991112223', 'Engineer At Risk', 'IDLE', 'protocol_qa', 'id', 'all', 5, '2026-10-15')
-  `).run(rescueJid);
+    VALUES (?, '6289991112223', 'Engineer At Risk', 'IDLE', 'protocol_qa', 'id', 'all', 5, ?)
+  `).run(rescueJid, yesterday);
 
   const atRiskList = getUsersForStreakRescue();
   console.log(`Found ${atRiskList.length} users for streak rescue.`);
