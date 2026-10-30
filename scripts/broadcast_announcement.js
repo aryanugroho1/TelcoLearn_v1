@@ -19,9 +19,13 @@ function sleep(ms) {
 async function apiRequest(endpoint, method = 'GET') {
   const url = `${COOLIFY_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}secret=${SECRET_KEY}`;
   const res = await fetch(url, { method });
-  if (!res.ok) {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
     const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
+    if (text.includes('<!DOCTYPE')) {
+      throw new Error(`Server Coolify mengembalikan halaman Web Gateway HTML. Harap klik 'Redeploy' pada dashboard Coolify agar fitur broadcast aktif.`);
+    }
+    throw new Error(`HTTP ${res.status}: ${text.slice(0, 100)}`);
   }
   return res.json();
 }
