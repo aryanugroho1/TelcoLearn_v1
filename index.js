@@ -501,6 +501,73 @@ function startWebServer() {
       }
     }
 
+    // Endpoint Broadcast Pengumuman / Permohonan Maaf Satu Kali (Anti-Ban Serial)
+    if (pathname.startsWith('/api/admin/broadcast')) {
+      const authHeader = req.headers['authorization'] || '';
+      const secretQuery = parsedUrl.searchParams.get('secret') || parsedUrl.searchParams.get('key');
+      const expectedSecret = process.env.ADMIN_EXPORT_SECRET || 'telcolearn-export-key-2026';
+
+      if (secretQuery !== expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized. Invalid secret key.' }));
+        return;
+      }
+
+      try {
+        const { 
+          getBroadcastPreview, 
+          getBroadcastState, 
+          startSerialBroadcast, 
+          pauseBroadcast, 
+          resetBroadcastState 
+        } = await import('./services/broadcastService.js');
+
+        const action = parsedUrl.searchParams.get('action') || (pathname.split('/')[4] || 'status');
+
+        if (req.method === 'GET') {
+          if (action === 'preview') {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(getBroadcastPreview(), null, 2));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({
+            status: getBroadcastState(),
+            preview: getBroadcastPreview()
+          }, null, 2));
+          return;
+        }
+
+        if (req.method === 'POST') {
+          if (action === 'start' || action === 'resume') {
+            const result = await startSerialBroadcast(() => sockInstance);
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(result, null, 2));
+            return;
+          }
+          if (action === 'pause') {
+            const result = pauseBroadcast();
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(result, null, 2));
+            return;
+          }
+          if (action === 'reset') {
+            const result = resetBroadcastState();
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(result, null, 2));
+            return;
+          }
+        }
+
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `Unknown action: ${action}` }));
+        return;
+      } catch (bcErr) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: bcErr.message }));
+        return;
+      }
+    }
 
     // Endpoint reconnect cepat (tanpa hapus file sesi / tanpa scan QR ulang)
     if (pathname === '/reconnect' || pathname === '/api/reconnect') {
@@ -611,6 +678,17 @@ function startWebServer() {
         <a href="/reset" class="btn btn-secondary" onclick="return confirm('Peringatan: Opsi ini akan menghapus sesi WhatsApp dan meminta Scan QR Code ulang. Lanjutkan?');">
           ⚠️ Hapus Sesi & Scan QR Baru
         </a>
+      </div>
+      <div style="margin-top: 24px; padding: 16px; background: #0f172a; border-radius: 12px; border: 1px solid #334155; text-align: left;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="color: #38bdf8; font-size: 13px;">📢 One-Time Serial Broadcast</strong>
+          <span style="font-size: 10px; padding: 2px 8px; border-radius: 6px; background: #334155; color: #94a3b8; font-weight: 600;">ANTI-BAN SERIAL</span>
+        </div>
+        <p style="font-size: 12px; margin: 4px 0 12px 0; color: #cbd5e1; line-height: 1.5;">Kirim pesan permohonan maaf koneksi & update kebijakan 14 hari ke seluruh pengguna secara aman (serial pacing).</p>
+        <div style="display: flex; gap: 8px;">
+          <a href="/api/admin/broadcast?action=preview&secret=telcolearn-export-key-2026" target="_blank" class="btn btn-secondary" style="flex: 1; text-align: center; font-size: 12px;">🔍 Cek Preview</a>
+          <button onclick="if(confirm('Mulai kirim broadcast serial ke seluruh pengguna? Estimasi selesai ~60 menit secara serial aman.')){fetch('/api/admin/broadcast?action=start&secret=telcolearn-export-key-2026',{method:'POST'}).then(r=>r.json()).then(d=>alert(d.message)).then(()=>location.reload())}" class="btn btn-primary" style="flex: 1; text-align: center; font-size: 12px; cursor: pointer; border: none;">🚀 Mulai Kirim</button>
+        </div>
       </div>
     ` : isCooldown ? `
       <div class="badge badge-cooldown">🛑 PROTEKSI COOLDOWN AKTIF</div>
