@@ -22,6 +22,16 @@ let activeCronJobs = [];
 let currentSocketGetter = null;
 
 /**
+ * Kontrol Status Outbound Scheduler
+ * Demi keamanan akun WhatsApp dari suspend/restriksi Meta, default di-set true (PAUSED).
+ * Hanya berjalan jika explicitly ENABLE_OUTBOUND_SCHEDULER === 'true' DAN PAUSE_OUTBOUND_SCHEDULER !== 'true'.
+ */
+let isOutboundPaused = (
+  process.env.PAUSE_OUTBOUND_SCHEDULER === 'false' ||
+  (process.env.ENABLE_OUTBOUND_SCHEDULER === 'true' && process.env.PAUSE_OUTBOUND_SCHEDULER !== 'true')
+) ? false : true;
+
+/**
  * Dispatch materi terjadwal untuk slot tertentu dengan proteksi anti-bulk spam
  */
 export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
@@ -34,6 +44,11 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
   } else {
     sock = sockOrSlot || (typeof currentSocketGetter === 'function' ? currentSocketGetter() : currentSocketGetter);
     slotName = maybeSlotName || 'morning';
+  }
+
+  if (isOutboundPaused) {
+    console.log(`🛑 [Scheduler] Outbound messaging sedang DIJEDA SEMENTARA (Safety Mode: Inbound Pull Only). Melewati slot ${slotName}.`);
+    return { success: false, paused: true, message: `Outbound scheduler sedang dijeda demi keamanan akun.` };
   }
 
   console.log(`⏰ [Scheduler] Memulai dispatch materi otomatis untuk slot: ${slotName.toUpperCase()}`);
@@ -134,6 +149,11 @@ export async function dispatchScheduledSlot(sockOrSlot, maybeSlotName) {
  * Dispatch peringatan streak akan padam (Streak Rescue Alert) pada pukul 20:00 WIB
  */
 export async function dispatchStreakRescue(maybeSock) {
+  if (isOutboundPaused) {
+    console.log('🛑 [Streak Rescue] Outbound messaging sedang DIJEDA SEMENTARA (Safety Mode: Inbound Pull Only). Melewati pengiriman.');
+    return { success: false, paused: true, message: 'Outbound streak rescue sedang dijeda demi keamanan akun.' };
+  }
+
   const sock = maybeSock || (typeof currentSocketGetter === 'function' ? currentSocketGetter() : currentSocketGetter);
   if (!sock) return;
 
@@ -192,18 +212,30 @@ export function initScheduler(sockOrGetter) {
 
   // 1. Slot Pagi (07:30 WIB)
   const morningJob = cron.schedule('30 7 * * *', () => {
+    if (isOutboundPaused) {
+      console.log('🛑 [Scheduler Worker 07:30 WIB] Outbound scheduler sedang DIJEDA. Melewati pengiriman materi pagi.');
+      return;
+    }
     dispatchScheduledSlot('morning');
   }, { timezone });
   activeCronJobs.push(morningJob);
 
   // 2. Slot Siang (12:30 WIB)
   const afternoonJob = cron.schedule('30 12 * * *', () => {
+    if (isOutboundPaused) {
+      console.log('🛑 [Scheduler Worker 12:30 WIB] Outbound scheduler sedang DIJEDA. Melewati pengiriman materi siang.');
+      return;
+    }
     dispatchScheduledSlot('afternoon');
   }, { timezone });
   activeCronJobs.push(afternoonJob);
 
   // 3. Streak Rescue Alert (20:00 WIB - Penyelamat Streak Sebelum Tengah Malam)
   const streakRescueJob = cron.schedule('0 20 * * *', async () => {
+    if (isOutboundPaused) {
+      console.log('🛑 [Scheduler Worker 20:00 WIB] Outbound scheduler sedang DIJEDA. Melewati streak rescue alert.');
+      return;
+    }
     console.log('🔥 [Scheduler Worker] Memicu pengecekan streak rescue alert...');
     await dispatchStreakRescue();
   }, { timezone });
@@ -211,23 +243,77 @@ export function initScheduler(sockOrGetter) {
 
   // 4. Slot Malam (20:30 WIB)
   const nightJob = cron.schedule('30 20 * * *', () => {
+    if (isOutboundPaused) {
+      console.log('🛑 [Scheduler Worker 20:30 WIB] Outbound scheduler sedang DIJEDA. Melewati pengiriman materi malam.');
+      return;
+    }
     dispatchScheduledSlot('night');
   }, { timezone });
   activeCronJobs.push(nightJob);
 
-  // 5. Laporan Kuota & Token Harian ke Email Admin (21:30 WIB)
+  // 5. Laporan Kuota & Token Harian ke Email Admin (21:30 WIB - Tetap Berjalan)
   const reportJob = cron.schedule('30 21 * * *', async () => {
     console.log('📊 [Scheduler Worker] Memicu pengiriman laporan kuota token harian ke email admin...');
     await sendDailyEmailReport();
   }, { timezone });
   activeCronJobs.push(reportJob);
 
-  console.log(`📅 [Scheduler Worker] Aktif 24/7 untuk zona waktu ${timezone}:`);
-  console.log(`   🌅 Pagi          : 07:30 WIB`);
-  console.log(`   ☀️ Siang         : 12:30 WIB`);
-  console.log(`   🔥 Streak Rescue : 20:00 WIB`);
-  console.log(`   🌙 Malam         : 20:30 WIB`);
-  console.log(`   📊 Report        : 21:30 WIB (Daily Token & Quota Email)`);
+  if (isOutboundPaused) {
+    console.log(`🛑 [Scheduler Worker] Mode Keamanan Akun Aktif: Outbound cron broadcast DIJEDA SEMENTARA.`);
+    console.log(`   Slot Pagi (07:30), Siang (12:30), Streak Rescue (20:00), dan Malam (20:30) TIDAK AKAN MENGIRIM PESAN.`);
+    console.log(`   Bot tetap 100% responsif menjawab pesan masuk (Inbound on-demand: /belajar, /quiz, tanya AI).`);
+    console.log(`   📊 Report email admin (21:30 WIB) tetap aktif.`);
+  } else {
+    console.log(`📅 [Scheduler Worker] Aktif 24/7 untuk zona waktu ${timezone}:`);
+    console.log(`   🌅 Pagi          : 07:30 WIB`);
+    console.log(`   ☀️ Siang         : 12:30 WIB`);
+    console.log(`   🔥 Streak Rescue : 20:00 WIB`);
+    console.log(`   🌙 Malam         : 20:30 WIB`);
+    console.log(`   📊 Report        : 21:30 WIB (Daily Token & Quota Email)`);
+  }
+}
+
+/**
+ * Jeda outbound scheduler sementara (Safety Mode)
+ */
+export function pauseOutboundScheduler() {
+  isOutboundPaused = true;
+  console.log('🛑 [Scheduler Worker] Outbound cron scheduler berhasil DIJEDA SEMENTARA.');
+  return { success: true, paused: true, message: 'Outbound cron scheduler berhasil dijeda sementara.' };
+}
+
+/**
+ * Aktifkan kembali outbound scheduler
+ */
+export function resumeOutboundScheduler() {
+  isOutboundPaused = false;
+  console.log('▶️ [Scheduler Worker] Outbound cron scheduler berhasil DIAKTIFKAN KEMBALI.');
+  return { success: true, paused: false, message: 'Outbound cron scheduler berhasil diaktifkan kembali.' };
+}
+
+/**
+ * Cek apakah outbound scheduler sedang dijeda
+ */
+export function isOutboundSchedulerPaused() {
+  return isOutboundPaused;
+}
+
+/**
+ * Dapatkan ringkasan status cron scheduler
+ */
+export function getSchedulerStatus() {
+  const timezone = process.env.TIMEZONE || 'Asia/Jakarta';
+  return {
+    paused: isOutboundPaused,
+    timezone,
+    slots: [
+      { slot: 'morning', time: '07:30 WIB', enabled: !isOutboundPaused },
+      { slot: 'afternoon', time: '12:30 WIB', enabled: !isOutboundPaused },
+      { slot: 'streakRescue', time: '20:00 WIB', enabled: !isOutboundPaused },
+      { slot: 'night', time: '20:30 WIB', enabled: !isOutboundPaused },
+      { slot: 'dailyEmailReport', time: '21:30 WIB', enabled: true, note: 'Admin Email Only' }
+    ]
+  };
 }
 
 /**

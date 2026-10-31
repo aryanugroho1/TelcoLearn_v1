@@ -1530,6 +1530,87 @@ _Contoh: /broadcast pesan Halo rekan-rekan engineer, malam ini ada pembaruan mod
       return;
     }
 
+    // 6.7. ADMIN IN-CHAT SCHEDULER CONTROLLER (/scheduler, /cron)
+    const isSchedulerCommand = (
+      lowerText === '/scheduler' || lowerText.startsWith('/scheduler') ||
+      lowerText === 'scheduler' || lowerText.startsWith('scheduler ') ||
+      lowerText === '/cron' || lowerText.startsWith('/cron') ||
+      lowerText === 'cron' || lowerText.startsWith('cron ')
+    );
+
+    if (isSchedulerCommand) {
+      const configuredAdmins = [
+        process.env.ADMIN_PHONE_NUMBER,
+        process.env.BOT_PHONE_NUMBER,
+        '817090934764',
+        '07090934764',
+        '7090934764'
+      ].filter(Boolean).flatMap(p => p.split(',')).map(p => p.replace(/\D/g, '').trim()).filter(Boolean);
+
+      const isSenderAdmin = isSelfChat || configuredAdmins.some(adminNum => {
+        const cleanAdmin = adminNum.replace(/^0/, '');
+        return (
+          phoneNumber === adminNum ||
+          cleanSenderPhone === adminNum ||
+          user?.phone_number === adminNum ||
+          phoneNumber.includes(cleanAdmin) ||
+          phoneNumber.endsWith(cleanAdmin) ||
+          senderJid.includes(cleanAdmin)
+        );
+      });
+
+      if (!isSenderAdmin) {
+        await reply({ text: '⛔ Perintah */scheduler* khusus untuk Administrator TelcoLearn.' });
+        return;
+      }
+
+      const {
+        pauseOutboundScheduler,
+        resumeOutboundScheduler,
+        getSchedulerStatus
+      } = await import('./schedulerService.js');
+
+      const subCommand = lowerText.replace(/^\/?(scheduler|cron)\s*/i, '').trim();
+
+      if (subCommand === 'pause' || subCommand === 'stop') {
+        const res = pauseOutboundScheduler();
+        await reply({
+          text: `⏸️ *[OUTBOUND CRON SCHEDULER DIJEDA]*\n\n${res.message}\n\n🛡️ *Safety Mode Aktif:*\nSeluruh pengiriman materi terjadwal (Pagi 07:30, Siang 12:30, Streak Rescue 20:00, dan Malam 20:30 WIB) *dihentikan sementara* demi melindungi nomor bot WhatsApp dari restriksi/suspend Meta.\n\n💡 _Bot tetap 100% responsif terhadap pesan masuk pengguna (/belajar, /quiz, tanya AI, dll)._\n💡 _Ketik */scheduler resume* jika ingin mengaktifkan kembali._`
+        });
+        return;
+      }
+
+      if (subCommand === 'resume' || subCommand === 'start') {
+        const res = resumeOutboundScheduler();
+        await reply({
+          text: `▶️ *[OUTBOUND CRON SCHEDULER DIAKTIFKAN KEMBALI]*\n\n${res.message}\n\n⚠️ *Perhatian:* Pengiriman materi otomatis harian (Pagi 07:30, Siang 12:30, Streak Rescue 20:00, dan Malam 20:30 WIB) akan berjalan kembali sesuai jadwal zona waktu Jakarta.\n\n💡 _Ketik */scheduler status* untuk memantau status._\n💡 _Ketik */scheduler pause* untuk jeda kembali._`
+        });
+        return;
+      }
+
+      // Default: status
+      const status = getSchedulerStatus();
+      const statusBadge = status.paused ? '🛑 DIJEDA SEMENTARA (Safety Mode)' : '🟢 AKTIF BERJALAN';
+      const slotLines = status.slots.map(s => {
+        const icon = s.enabled ? '✅' : '⏸️';
+        const note = s.note ? ` _(${s.note})_` : '';
+        return `• *${s.slot}* (${s.time}): ${icon}${note}`;
+      }).join('\n');
+
+      const infoText = `📅 *STATUS CRON SCHEDULER TELCOLEARN*\n━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `• Status Outbound : *${statusBadge}*\n` +
+        `• Zona Waktu      : *${status.timezone}*\n\n` +
+        `⏰ *Daftar Slot:*\n${slotLines}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 *Perintah Admin:*\n` +
+        `👉 */scheduler pause*  : Jeda pengiriman pesan terjadwal otomatis\n` +
+        `👉 */scheduler resume* : Aktifkan kembali pengiriman otomatis\n` +
+        `👉 */scheduler status* : Cek status terkini`;
+
+      await reply({ text: infoText });
+      return;
+    }
+
     // 7. HEURISTIC LOG DETECTOR (Gemini 3 Flash Cognitive Engine)
     if (detectTelcoLogPattern(rawText)) {
       const activeLang = trackAndAdaptUserLanguage(user, rawText);

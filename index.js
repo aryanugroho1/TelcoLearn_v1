@@ -22,7 +22,7 @@ import QRCode from 'qrcode';
 
 import { initializeDatabase } from './database/init.js';
 import { handleIncomingMessage } from './services/routerService.js';
-import { initScheduler, stopScheduler } from './services/schedulerService.js';
+import { initScheduler, stopScheduler, isOutboundSchedulerPaused } from './services/schedulerService.js';
 import { getStoredMessage, saveMessageToStore, isSocketReady } from './services/antiBanService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -604,6 +604,32 @@ function startWebServer() {
       return;
     }
 
+    // Endpoint API Kontrol Scheduler (status, pause, resume)
+    if (pathname === '/api/admin/scheduler') {
+      const action = parsedUrl.searchParams.get('action') || 'status';
+      const {
+        getSchedulerStatus,
+        pauseOutboundScheduler,
+        resumeOutboundScheduler
+      } = await import('./services/schedulerService.js');
+
+      if (action === 'pause') {
+        const resObj = pauseOutboundScheduler();
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(resObj, null, 2));
+        return;
+      }
+      if (action === 'resume') {
+        const resObj = resumeOutboundScheduler();
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(resObj, null, 2));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(getSchedulerStatus(), null, 2));
+      return;
+    }
+
     // Endpoint reconnect cepat (tanpa hapus file sesi / tanpa scan QR ulang)
     if (pathname === '/reconnect' || pathname === '/api/reconnect') {
       console.log('🔄 [Web Portal] Tindakan Rekoneksi Cepat dipicu via browser. Merefresh socket WhatsApp...');
@@ -669,6 +695,7 @@ function startWebServer() {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     const isConnected = botConnectionStatus === 'connected';
     const isCooldown = botConnectionStatus === 'cooldown';
+    const isSchedulerPaused = typeof isOutboundSchedulerPaused === 'function' ? isOutboundSchedulerPaused() : true;
     const refreshSec = isConnected ? 60 : (isCooldown ? 15 : 6);
     const html = `<!DOCTYPE html>
 <html lang="id">
@@ -784,6 +811,26 @@ function startWebServer() {
         </a>
       </div>
     `}
+    <div style="margin-top: 20px; padding: 14px; background: #0f172a; border-radius: 12px; border: 1px solid #334155; text-align: left;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <strong style="color: #38bdf8; font-size: 13px;">⏰ Outbound Cron Scheduler</strong>
+        <span style="font-size: 10px; padding: 2px 8px; border-radius: 6px; background: ${isSchedulerPaused ? '#991b1b' : '#15803d'}; color: ${isSchedulerPaused ? '#fecaca' : '#dcfce7'}; font-weight: 600;">
+          ${isSchedulerPaused ? '🛑 DIJEDA SEMENTARA' : '🟢 AKTIF BERJALAN'}
+        </span>
+      </div>
+      <p style="font-size: 12px; margin: 4px 0 10px 0; color: #cbd5e1; line-height: 1.5;">
+        ${isSchedulerPaused 
+          ? 'Safety Mode: Push materi otomatis (Pagi 07:30, Siang 12:30, Streak 20:00, Malam 20:30) dijeda untuk melindungi nomor dari ban Meta. Bot beroperasi dalam mode Inbound On-Demand.' 
+          : 'Jadwal push materi otomatis harian aktif (Pagi, Siang, Streak Rescue, Malam).'}
+      </p>
+      <div style="display: flex; gap: 8px;">
+        ${isSchedulerPaused ? `
+          <button onclick="if(confirm('Aktifkan kembali jadwal push materi otomatis harian?')){fetch('/api/admin/scheduler?action=resume').then(r=>r.json()).then(d=>alert(d.message)).then(()=>location.reload())}" class="btn btn-secondary" style="flex: 1; text-align: center; font-size: 12px; cursor: pointer; border: none;">▶️ Aktifkan Kembali</button>
+        ` : `
+          <button onclick="if(confirm('Jeda seluruh pengiriman push materi terjadwal sekarang?')){fetch('/api/admin/scheduler?action=pause').then(r=>r.json()).then(d=>alert(d.message)).then(()=>location.reload())}" class="btn btn-secondary" style="flex: 1; text-align: center; font-size: 12px; cursor: pointer; border: none; color: #fca5a5;">⏸️ Jeda Scheduler</button>
+        `}
+      </div>
+    </div>
     <div class="footer">TelcoLearn Engine v3.7.0 &bull; Powered by Baileys & Gemini 3 Flash</div>
   </div>
 </body>
